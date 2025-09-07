@@ -34,12 +34,24 @@ export default class PlayScene extends Phaser.Scene {
   private readonly BIRD_H = 24;
   private readonly BIRD_HALF_W = 16;
   private readonly INVINCIBLE_CHECK_TWEEN_KEY = "invincibleTween";
-
+  preload() {
+    this.load.spritesheet("bird","client/public/Bird.png", {
+      frameWidth: 32,
+      freameHeight: 24
+    });
+  }
   create() {
     const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "http://localhost:3000";
     this.socket = io(serverUrl, { transports: ["websocket"] });
 
     this.pipeGraphics = this.add.graphics();
+
+    this.anims.create({
+      key: "fly",
+      frames: this.anims.generateFrameNumbers("bird", { start: 0, end: 2}),
+      frameRate: 10,
+      repeat: -1
+    });
 
     this.socket.on("connect", () => {
       this.meId = this.socket.id ?? null;
@@ -88,31 +100,40 @@ export default class PlayScene extends Phaser.Scene {
   private syncPlayers(players: Record<string, Player>) {
     // create or update birds
     Object.values(players).forEach((p) => {
-      let rect = this.birds.get(p.id);
-      if (!rect) {
-        rect = this.add.rectangle(p.x, p.y, this.BIRD_W, this.BIRD_H, 0x00aa00).setOrigin(0.5);
-        this.birds.set(p.id, rect);
+      let bird = this.birds.get(p.id) as Phaser.GameObjects.Sprite;
+      if (!bird) {
+        bird = this.add.sprite(p.x, p.y, "bird").setOrigin(0.5);
+        this.birds.set(p.id, bird);
+
+        bird.anims.play("fly");
       } else {
-        rect.setPosition(p.x, p.y);
+        bird.setPosition(p.x, p.y);
       }
 
       // color based on alive
-      const fill = p.alive ? 0x00aa00 : 0x888888;
-      rect.setFillStyle(fill);
+      if (!p.alive) {
+        bird.setTint(0x888888);
+        bird.anims.stop();
+      } else {
+        bird.clearTint();
+        if (!bird.anims.isPlaying) {
+          bird.anims.play("fly);
+        }
+      }
 
       // invincibility handling
       const nowMs = Date.now();
       const isInvincible = p.invincibleUntil && nowMs < p.invincibleUntil;
-      const tweensOfRect = this.tweens.getTweensOf(rect);
+      const tweensOfBird = this.tweens.getTweensOf(bird);
 
       if (isInvincible) {
         // if no existing tween (or all tweens not the invincibility one), add one
-        const hasInvTween = tweensOfRect.some(t => (t as any).key === this.INVINCIBLE_CHECK_TWEEN_KEY);
+        const hasInvTween = tweensOfBird.some(t => (t as any).key === this.INVINCIBLE_CHECK_TWEEN_KEY);
         if (!hasInvTween) {
           // kill other alpha tweens to avoid stacking
-          tweensOfRect.forEach(t => t.stop());
+          tweensOfBird.forEach(t => t.stop());
           this.tweens.add({
-            targets: rect,
+            targets: bird,
             alpha: { from: 1, to: 0.4 },
             duration: 300,
             ease: 'Linear',
@@ -123,10 +144,10 @@ export default class PlayScene extends Phaser.Scene {
         }
       } else {
         // not invincible -> ensure any invincibility tweens are removed and alpha restored
-        tweensOfRect.forEach(t => {
+        tweensOfBird.forEach(t => {
           if ((t as any).key === this.INVINCIBLE_CHECK_TWEEN_KEY) t.stop();
         });
-        rect.setAlpha(1);
+        bird.setAlpha(1);
       }
     });
 
