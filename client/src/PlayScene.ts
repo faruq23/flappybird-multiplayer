@@ -35,12 +35,12 @@ export default class PlayScene extends Phaser.Scene {
   private readonly BIRD_HALF_W = 16;
   private readonly INVINCIBLE_CHECK_TWEEN_KEY = "invincibleTween";
   preload() {
-    this.load.spritesheet("bird","public/Bird.png", {
+    this.load.spritesheet("bird","/Bird.png", {
       frameWidth: 32,
       frameHeight: 24
     });
-    this.load.image("pipeBottom", "public/Pipe.png");
-    this.load.image("pipeTop", "public/InvertPipe.png");
+    this.load.image("pipeBottom", "/Pipe.png");
+    this.load.image("pipeTop", "/InvertPipe.png");
   }
   create() {
     const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "http://localhost:3000";
