@@ -117,7 +117,7 @@ export default class PlayScene extends Phaser.Scene {
       } else {
         bird.clearTint();
         if (!bird.anims.isPlaying) {
-          bird.anims.play("fly);
+          bird.anims.play("fly");
         }
       }
 
