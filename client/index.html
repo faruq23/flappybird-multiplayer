@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flappy Multiplayer</title>
     <style>
+      /* CSS Baru untuk memusatkan game */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden; /* Mencegah scrollbar muncul */
+      }
+
+      body {
+        display: flex;
+        justify-content: center; /* Memusatkan secara horizontal */
+        align-items: center;    /* Memusatkan secara vertikal */
+        background-color: #2c3e50; /* Warna latar belakang abu-abu kebiruan */
+      }
+      
+      /* Style untuk tombol restart yang sudah ada */
       #restart-button {
         position: absolute;
         top: 50%;
