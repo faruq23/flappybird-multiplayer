@@ -39,6 +39,7 @@ export default class PlayScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 24
     });
+    this.load.image("
   }
   create() {
     const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "http://localhost:3000";
