@@ -39,7 +39,8 @@ export default class PlayScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 24
     });
-    this.load.image("
+    this.load.image("pipeTop", "public/Pipe.png");
+    this.load.image("pipeBottom", "public/InvertPipe.png");
   }
   create() {
     const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "http://localhost:3000";
@@ -176,23 +177,23 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   private drawPipes(pipes: Pipe[]) {
-    this.pipeGraphics.clear();
-
-    const pipeW = 64;
-    const halfW = pipeW / 2;
+    this.children.getAll().forEach((child) => {
+     if ((child as any).isPipe) child.destroy();
+    });
     const topBottom = 600;
 
     pipes.forEach((p) => {
       const gapTop = p.gapY - p.gapHeight / 2;
       const gapBottom = p.gapY + p.gapHeight / 2;
 
-      // top pipe (darker green)
-      this.pipeGraphics.fillStyle(0x228B22, 1);
-      this.pipeGraphics.fillRect(p.x - halfW, 0, pipeW, Math.max(0, gapTop));
-
+      // top pipe 
+      const topPipe = this.add.image(p.x, gapTop, "pipeTop")
+        .setOrigin(0.5, 1); // titik bawah gambar di pos gap
+      (topPipe as any).isPipe = true;
       // bottom pipe
-      this.pipeGraphics.fillStyle(0x228B22, 1);
-      this.pipeGraphics.fillRect(p.x - halfW, gapBottom, pipeW, Math.max(0, topBottom - gapBottom));
+      const bottomPipe = this.add.image(p.x, gapBottom, "pipeBottom")
+        .setOrigin(0.5, 0); // titik atas gambar di pos gap
+      (bottomPipe as any).isPipe = true;
     });
   }
 }
