@@ -23,7 +23,7 @@ type GameState = {
 export default class PlayScene extends Phaser.Scene {
   private socket!: Socket;
   private meId: string | null = null;
-  private birds: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  private birds: Map<string, Phaser.GameObjects.Sprite> = new Map();
   private pipeGraphics!: Phaser.GameObjects.Graphics;
   private lastFlapAt = 0;
   private gameState: GameState | null = null;
@@ -35,9 +35,9 @@ export default class PlayScene extends Phaser.Scene {
   private readonly BIRD_HALF_W = 16;
   private readonly INVINCIBLE_CHECK_TWEEN_KEY = "invincibleTween";
   preload() {
-    this.load.spritesheet("bird","client/public/Bird.png", {
+    this.load.spritesheet("bird","public/Bird.png", {
       frameWidth: 32,
-      freameHeight: 24
+      frameHeight: 24
     });
   }
   create() {
