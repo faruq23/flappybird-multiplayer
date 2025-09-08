@@ -13,7 +13,7 @@ export interface Pipe {
   x: number;
   gapY: number; // center of gap
   gapHeight: number;
-  passedBy?: Record<string, boolean>; // track which players already scored on this pipe
+  passedBy: Record<string, boolean>; // track which players already scored on this pipe
 }
 
 export interface GameState {

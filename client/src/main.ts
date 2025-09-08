@@ -9,10 +9,11 @@ const path = window.location.pathname;
 let initialScenes: any[] = [];
 
 if (path.startsWith('/single-player')) {
-  initialScenes = [SinglePlayerScene];
+  initialScenes = [SinglePlayerScene, MainMenuScene, LobbyScene, MultiplayerPlayScene];
+} else if (path.startsWith('/multiplayer')) {
+  initialScenes = [LobbyScene, MultiplayerPlayScene, MainMenuScene, SinglePlayerScene];
 } else {
-  // Any other path (e.g., '/' or '/multiplayer') goes to the main menu
-  initialScenes = [MainMenuScene, LobbyScene, MultiplayerPlayScene];
+  initialScenes = [MainMenuScene, LobbyScene, MultiplayerPlayScene, SinglePlayerScene];
 }
 
 const config: Phaser.Types.Core.GameConfig = {
