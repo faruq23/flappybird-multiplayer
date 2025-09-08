@@ -20,7 +20,7 @@ type GameState = {
   tick: number;
 };
 
-export default class PlayScene extends Phaser.Scene {
+export default class MultiplayerPlayScene extends Phaser.Scene {
   private socket!: Socket;
   private meId: string | null = null;
   private birds: Map<string, Phaser.GameObjects.Sprite> = new Map();
@@ -28,6 +28,10 @@ export default class PlayScene extends Phaser.Scene {
   private lastFlapAt = 0;
   private gameState: GameState | null = null;
   private gameOverText!: Phaser.GameObjects.Text;
+
+  constructor() {
+    super({ key: "MultiplayerPlayScene" });
+  }
 
   // constants
   private readonly BIRD_W = 32;
