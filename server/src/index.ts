@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { GameState, Pipe, Player } from "./types";
+import { GameState, Pipe, Player } from '@shared/types';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const TICK_MS = 50; // 20 TPS
@@ -14,12 +14,10 @@ const INVINCIBLE_MS = 2000;
 const BIRD_HALF_W = 16;
 const PIPE_W = 64;
 
-// Konstanta untuk celah pipa (kesulitan vertikal)
 const INITIAL_GAP_HEIGHT = 150;
 const MIN_GAP_HEIGHT = 75;
 const REDUCTION_PER_SCORE = 1;
 
-// Konstanta untuk interval pipa (kesulitan horizontal)
 const INITIAL_PIPE_EVERY_MS = 3000;
 const MIN_PIPE_EVERY_MS = 1200;
 const INTERVAL_REDUCTION_PER_SCORE = 25;
@@ -110,8 +108,8 @@ io.on("connection", (socket) => {
       alive: true,
       invincibleUntil: Date.now() + INVINCIBLE_MS
     };
-    socket.emit("init", room.state); // Send state to the new player
-    socket.to(roomId).emit("playerJoined", room.state.players[id]); // Inform others
+    socket.emit("init", room.state); 
+    socket.to(roomId).emit("playerJoined", room.state.players[id]);
   };
 
   socket.on("createRoom", () => {
@@ -119,11 +117,15 @@ io.on("connection", (socket) => {
     while(rooms[roomId]) {
       roomId = Math.random().toString(36).slice(2, 8);
     }
-
-    const newState: GameState = { players: {}, pipes: [], tick: 0 };
+    
+    // --- PERUBAHAN 1: Tambahkan `started: false` saat membuat state baru ---
+    const newState: GameState = { players: {}, pipes: [], tick: 0, started: false };
     const newRoom = {
       state: newState,
       interval: setInterval(() => {
+        // --- PERUBAHAN 2: Hentikan game loop jika game belum dimulai ---
+        if (!newRoom.state.started) return;
+
         const dt = TICK_MS;
         newState.tick++;
         Object.values(newState.players).forEach((p) => {
@@ -146,7 +148,8 @@ io.on("connection", (socket) => {
         updatePipes(dt, newRoom);
         io.to(roomId).emit("update", newState);
       }, TICK_MS),
-      lastPipeAt: Date.now() + 1000 - INITIAL_PIPE_EVERY_MS
+      // --- PERUBAHAN 3: Sederhanakan waktu spawn pipa pertama ---
+      lastPipeAt: Date.now()
     };
     rooms[roomId] = newRoom;
     socket.emit("roomCreated", roomId);
@@ -161,10 +164,23 @@ io.on("connection", (socket) => {
     }
   });
 
+  // --- PERUBAHAN 4: Set `started = true` saat game dimulai ---
   socket.on("startGame", (roomId: string) => {
-    if (rooms[roomId]) {
-      io.to(roomId).emit('gameStarted');
-      io.to(roomId).emit("init", rooms[roomId].state);
+    const room = rooms[roomId];
+    if (room) {
+        console.log(`Starting game for room ${roomId}`);
+        room.state.started = true;
+        io.to(roomId).emit('gameStarted');
+    }
+  });
+
+  socket.on("clientReady", () => {
+    for (const roomId in rooms) {
+      if (rooms[roomId].state.players[socket.id]) {
+        console.log(`Client ${socket.id} is ready. Sending init state for room ${roomId}.`);
+        socket.emit("init", rooms[roomId].state);
+        break;
+      }
     }
   });
 

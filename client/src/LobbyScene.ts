@@ -65,6 +65,7 @@ class LobbyScene extends Phaser.Scene {
         const backButton = this.add.text(10, 10, '< Back to Home', { fontSize: '18px', color: '#fff' })
             .setInteractive();
         
+        // Tombol ini sudah benar, memanggil cleanup(true) untuk disconnect
         backButton.on('pointerdown', () => {
             this.cleanup(true);
             this.scene.start('MainMenuScene');
@@ -109,6 +110,7 @@ class LobbyScene extends Phaser.Scene {
             this.updatePlayerListText();
         });
 
+        // Event ini sudah benar, memanggil cleanup() (default false) agar socket tidak disconnect
         this.socket.on('gameStarted', () => {
             this.cleanup();
             this.scene.start('MultiplayerPlayScene', { socket: this.socket });
@@ -119,7 +121,11 @@ class LobbyScene extends Phaser.Scene {
             this.time.delayedCall(3000, () => errorText.destroy());
         });
 
-        this.events.on('shutdown', () => this.cleanup(true), this);
+        // =================================================================
+        // HAPUS ATAU BERI KOMENTAR PADA BARIS DI BAWAH INI.
+        // Inilah penyebab utama socket terputus saat pindah scene.
+        // this.events.on('shutdown', () => this.cleanup(true), this);
+        // =================================================================
     }
 
     showRoomUI(roomId: string, isHost: boolean = true) {

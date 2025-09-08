@@ -3,7 +3,7 @@ export interface Player {
   name: string;
   x: number;
   y: number;
-  vy: number; // velocity Y for simple physics on client or server
+  vy: number;
   score: number;
   alive: boolean;
   invincibleUntil?: number;
@@ -12,13 +12,14 @@ export interface Player {
 export interface Pipe {
   id: string;
   x: number;
-  gapY: number; // center of gap
+  gapY: number;
   gapHeight: number;
-  passedBy: Record<string, boolean>; // track which players already scored on this pipe
+  passedBy: Record<string, boolean>;
 }
 
 export interface GameState {
   players: Record<string, Player>;
   pipes: Pipe[];
   tick: number;
+  started: boolean; // <-- TAMBAHKAN BARIS INI
 }

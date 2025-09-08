@@ -1,12 +1,22 @@
 {
   "compilerOptions": {
+    /* Opsi yang sudah ada */
     "target": "ES2020",
     "module": "commonjs",
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
-  }
+    "composite": true,
+    
+    /* --- TAMBAHAN PENTING --- */
+    "baseUrl": ".",
+    "paths": {
+      "@shared/*": ["../shared/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../shared" }
+  ]
 }

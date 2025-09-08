@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import PlayScene from './PlayScene';
 
 class MainMenuScene extends Phaser.Scene {
     constructor() {
