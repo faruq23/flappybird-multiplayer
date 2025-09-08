@@ -164,6 +164,7 @@ io.on("connection", (socket) => {
   socket.on("startGame", (roomId: string) => {
     if (rooms[roomId]) {
       io.to(roomId).emit('gameStarted');
+      io.to(roomId).emit("init", rooms[roomId].state);
     }
   });
 
