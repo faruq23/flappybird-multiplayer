@@ -1,5 +1,6 @@
 export interface Player {
   id: string;
+  name: string;
   x: number;
   y: number;
   vy: number; // velocity Y for simple physics on client or server

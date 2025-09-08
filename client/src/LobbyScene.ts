@@ -1,6 +1,16 @@
 import Phaser from 'phaser';
 import { io, Socket } from "socket.io-client";
 
+// Define types to match server
+type Player = {
+    id: string;
+    name: string;
+};
+
+type GameState = {
+    players: Record<string, Player>;
+};
+
 class LobbyScene extends Phaser.Scene {
     private socket!: Socket;
     private roomInput!: HTMLInputElement;
@@ -9,6 +19,8 @@ class LobbyScene extends Phaser.Scene {
     private createRoomButton!: Phaser.GameObjects.Text;
     private joinRoomButton!: Phaser.GameObjects.Text;
     private currentRoomId: string = '';
+    private players: Map<string, Player> = new Map();
+    private playerListText!: Phaser.GameObjects.Text;
 
     constructor() {
         super({ key: 'LobbyScene' });
@@ -18,20 +30,20 @@ class LobbyScene extends Phaser.Scene {
         const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "http://localhost:3000";
         this.socket = io(serverUrl, { transports: ["websocket"] });
 
-        this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 - 150, 'Multiplayer Lobby', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
+        this.add.text(this.cameras.main.width / 2, 50, 'Multiplayer Lobby', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
 
         this.roomInput = document.createElement('input');
         this.roomInput.type = 'text';
         this.roomInput.placeholder = 'Enter Room ID';
         this.roomInput.style.position = 'absolute';
-        this.roomInput.style.top = `${this.cameras.main.height / 2 - 25}px`;
+        this.roomInput.style.top = '100px';
         this.roomInput.style.left = `${this.cameras.main.width / 2 - 100}px`;
         this.roomInput.style.width = '200px';
         this.roomInput.style.padding = '10px';
         this.roomInput.style.fontSize = '16px';
         document.body.appendChild(this.roomInput);
 
-        this.createRoomButton = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 50, 'Create Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } })
+        this.createRoomButton = this.add.text(this.cameras.main.width / 2, 180, 'Create Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } })
             .setOrigin(0.5)
             .setInteractive();
 
@@ -39,7 +51,7 @@ class LobbyScene extends Phaser.Scene {
             this.socket.emit('createRoom');
         });
 
-        this.joinRoomButton = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 110, 'Join Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } })
+        this.joinRoomButton = this.add.text(this.cameras.main.width / 2, 240, 'Join Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } })
             .setOrigin(0.5)
             .setInteractive();
 
@@ -54,13 +66,14 @@ class LobbyScene extends Phaser.Scene {
             .setInteractive();
         
         backButton.on('pointerdown', () => {
-            this.cleanup();
-            window.location.href = '/';
+            this.cleanup(true);
+            this.scene.start('MainMenuScene');
         });
 
-        this.roomText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2, '', { fontSize: '28px', color: '#ffff00', align: 'center' }).setOrigin(0.5);
+        this.roomText = this.add.text(this.cameras.main.width / 2, 150, '', { fontSize: '28px', color: '#ffff00', align: 'center' }).setOrigin(0.5);
+        this.playerListText = this.add.text(this.cameras.main.width / 2, 300, '', { fontSize: '20px', color: '#fff', align: 'center' }).setOrigin(0.5);
 
-        this.startButton = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 60, 'Start Game', { fontSize: '24px', color: '#fff', backgroundColor: '#28a745', padding: { x: 10, y: 5 } })
+        this.startButton = this.add.text(this.cameras.main.width / 2, 450, 'Start Game', { fontSize: '24px', color: '#fff', backgroundColor: '#28a745', padding: { x: 10, y: 5 } })
             .setOrigin(0.5)
             .setInteractive()
             .setVisible(false);
@@ -75,11 +88,25 @@ class LobbyScene extends Phaser.Scene {
             this.showRoomUI(roomId);
         });
 
-        this.socket.on('init', () => {
-            if (this.currentRoomId) return; // This is the host, already handled by roomCreated
-            this.currentRoomId = this.roomInput.value.trim();
-            this.showRoomUI(this.currentRoomId, false);
-            this.roomText.setText(`Joined Room: ${this.currentRoomId}\nWaiting for host...`);
+        this.socket.on('init', (state: GameState) => {
+            if (this.currentRoomId) { // This is the host
+                Object.values(state.players).forEach(p => this.players.set(p.id, p));
+            } else { // This is a joining player
+                this.currentRoomId = this.roomInput.value.trim();
+                Object.values(state.players).forEach(p => this.players.set(p.id, p));
+                this.showRoomUI(this.currentRoomId, false);
+            }
+            this.updatePlayerListText();
+        });
+
+        this.socket.on('playerJoined', (player: Player) => {
+            this.players.set(player.id, player);
+            this.updatePlayerListText();
+        });
+
+        this.socket.on('playerLeft', (playerId: string) => {
+            this.players.delete(playerId);
+            this.updatePlayerListText();
         });
 
         this.socket.on('gameStarted', () => {
@@ -92,7 +119,7 @@ class LobbyScene extends Phaser.Scene {
             this.time.delayedCall(3000, () => errorText.destroy());
         });
 
-        this.events.on('shutdown', this.cleanup, this);
+        this.events.on('shutdown', () => this.cleanup(true), this);
     }
 
     showRoomUI(roomId: string, isHost: boolean = true) {
@@ -100,17 +127,22 @@ class LobbyScene extends Phaser.Scene {
         this.createRoomButton.setVisible(false);
         this.joinRoomButton.setVisible(false);
 
-        this.roomText.setText(`Room ID: ${roomId}\n(Share with a friend)`);
+        this.roomText.setText(`Room ID: ${roomId}`);
         if (isHost) {
             this.startButton.setVisible(true);
         }
     }
 
-    cleanup() {
+    updatePlayerListText() {
+        const playerNames = Array.from(this.players.values()).map(p => p.name);
+        this.playerListText.setText('Players in room:\n' + playerNames.join('\n'));
+    }
+
+    cleanup(disconnectSocket: boolean = false) {
         if (this.roomInput && this.roomInput.parentNode) {
             this.roomInput.parentNode.removeChild(this.roomInput);
         }
-        if (this.socket.active && !this.scene.isSleeping('MultiplayerPlayScene')) {
+        if (disconnectSocket && this.socket.active) {
             this.socket.disconnect();
         }
     }

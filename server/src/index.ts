@@ -99,8 +99,10 @@ io.on("connection", (socket) => {
     }
     socket.join(roomId);
     const id = socket.id;
+    const playerCount = Object.keys(room.state.players).length;
     room.state.players[id] = {
       id,
+      name: `player-${playerCount + 1}`,
       x: START_X,
       y: START_Y,
       vy: 0,
@@ -178,7 +180,9 @@ io.on("connection", (socket) => {
     for (const roomId in rooms) {
       const room = rooms[roomId];
       if (room.state.players[socket.id]) {
+        const player = room.state.players[socket.id];
         delete room.state.players[socket.id];
+        io.to(roomId).emit("playerLeft", player.id);
         if (Object.keys(room.state.players).length === 0) {
           clearInterval(room.interval);
           delete rooms[roomId];

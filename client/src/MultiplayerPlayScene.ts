@@ -1,6 +1,5 @@
-// PlayScene.ts
 import Phaser from "phaser";
-import { io, Socket } from "socket.io-client";
+import { Socket } from "socket.io-client";
 
 type Player = {
   id: string;
@@ -28,9 +27,14 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
   private lastFlapAt = 0;
   private gameState: GameState | null = null;
   private gameOverText!: Phaser.GameObjects.Text;
+  private backToMenuButton!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: "MultiplayerPlayScene" });
+  }
+
+  init(data: { socket: Socket }) {
+    this.socket = data.socket;
   }
 
   // constants
@@ -47,9 +51,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     this.load.image("pipeTop", "/InvertPipe.png");
   }
   create() {
-    const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "http://localhost:3000";
-    this.socket = io(serverUrl, { transports: ["websocket"] });
-
     this.pipeGraphics = this.add.graphics();
 
     this.anims.create({
@@ -59,9 +60,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
       repeat: -1
     });
 
-    this.socket.on("connect", () => {
-      this.meId = this.socket.id ?? null;
-    });
+    this.meId = this.socket.id ?? null;
 
     this.socket.on("init", (state: GameState) => {
       this.gameState = state;
@@ -88,6 +87,18 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
       color: "#ff0000",
       align: "center"
     }).setOrigin(0.5).setVisible(false);
+
+    this.backToMenuButton = this.add.text(400, 350, "Back to Menu", {
+        fontSize: "24px",
+        color: "#fff",
+        backgroundColor: "#333",
+        padding: { x: 10, y: 5 }
+    }).setOrigin(0.5).setInteractive().setVisible(false);
+
+    this.backToMenuButton.on('pointerdown', () => {
+        this.socket.disconnect();
+        this.scene.start('MainMenuScene');
+    });
   }
 
   private handleInput() {
@@ -168,14 +179,13 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     // show/hide game over
     if (this.meId) {
       const me = this.gameState?.players[this.meId];
-      const restartButton = document.getElementById('restart-button');
 
       if (me && !me.alive) {
         this.gameOverText.setVisible(true);
-        if (restartButton) restartButton.style.display = 'block';
+        this.backToMenuButton.setVisible(true);
       } else if (me && me.alive) {
         this.gameOverText.setVisible(false);
-        if (restartButton) restartButton.style.display = 'none';
+        this.backToMenuButton.setVisible(false);
       }
     }
   }
