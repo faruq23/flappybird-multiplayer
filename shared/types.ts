@@ -21,5 +21,5 @@ export interface GameState {
   players: Record<string, Player>;
   pipes: Pipe[];
   tick: number;
-  started: boolean; // <-- TAMBAHKAN BARIS INI
+  started: boolean; 
 }

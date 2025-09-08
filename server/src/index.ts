@@ -118,12 +118,10 @@ io.on("connection", (socket) => {
       roomId = Math.random().toString(36).slice(2, 8);
     }
     
-    // --- PERUBAHAN 1: Tambahkan `started: false` saat membuat state baru ---
     const newState: GameState = { players: {}, pipes: [], tick: 0, started: false };
     const newRoom = {
       state: newState,
       interval: setInterval(() => {
-        // --- PERUBAHAN 2: Hentikan game loop jika game belum dimulai ---
         if (!newRoom.state.started) return;
 
         const dt = TICK_MS;
@@ -148,7 +146,6 @@ io.on("connection", (socket) => {
         updatePipes(dt, newRoom);
         io.to(roomId).emit("update", newState);
       }, TICK_MS),
-      // --- PERUBAHAN 3: Sederhanakan waktu spawn pipa pertama ---
       lastPipeAt: Date.now()
     };
     rooms[roomId] = newRoom;
@@ -164,7 +161,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // --- PERUBAHAN 4: Set `started = true` saat game dimulai ---
   socket.on("startGame", (roomId: string) => {
     const room = rooms[roomId];
     if (room) {

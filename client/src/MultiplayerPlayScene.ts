@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Socket } from "socket.io-client";
-import { GameState, Player, Pipe } from "@shared/types"; // Pastikan path menggunakan alias
+import { GameState, Player, Pipe } from "@shared/types"; 
 
 export default class MultiplayerPlayScene extends Phaser.Scene {
   private socket!: Socket;
@@ -11,7 +11,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
   private gameState: GameState | null = null;
   private gameOverText!: Phaser.GameObjects.Text;
   private backToMenuButton!: Phaser.GameObjects.Text;
-  // --- PERUBAHAN 1: Tambahkan properti untuk teks penonton ---
   private spectatorText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -172,7 +171,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
   }
 
   private drawPipes(pipes: Pipe[]) {
-    // Fungsi ini tidak perlu diubah
     this.children.getAll().forEach((child) => {
      if ((child as any).isPipe) child.destroy();
     });

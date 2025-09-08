@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 
-// Type definitions for local game state
 type Pipe = { 
     x: number; 
     gapY: number; 

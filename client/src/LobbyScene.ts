@@ -120,12 +120,6 @@ class LobbyScene extends Phaser.Scene {
             const errorText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 50, 'Room not found!', { fontSize: '20px', color: '#ff0000' }).setOrigin(0.5);
             this.time.delayedCall(3000, () => errorText.destroy());
         });
-
-        // =================================================================
-        // HAPUS ATAU BERI KOMENTAR PADA BARIS DI BAWAH INI.
-        // Inilah penyebab utama socket terputus saat pindah scene.
-        // this.events.on('shutdown', () => this.cleanup(true), this);
-        // =================================================================
     }
 
     showRoomUI(roomId: string, isHost: boolean = true) {
