@@ -26,8 +26,12 @@ const app = express();
 app.use(cors());
 
 const httpServer = createServer(app);
+// PERUBAHAN DI SINI: Izinkan koneksi hanya dari Vercel Anda
 const io = new Server(httpServer, {
-  cors: { origin: "*" }
+  cors: { 
+    origin: "https://flappybird-multiplayer.vercel.app", // Ganti jika URL Vercel Anda berbeda
+    methods: ["GET", "POST"]
+  }
 });
 
 const rooms: Record<string, { state: GameState; interval: NodeJS.Timeout; lastPipeAt: number }> = {};
