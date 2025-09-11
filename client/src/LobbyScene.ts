@@ -27,7 +27,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     create() {
-        const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "https://flappybird-multiplayer.faruq23.replit.dev";
+        const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "https://c889bd4e-b45f-41f8-b7bb-d2c9eb048304-00-3gasm0ln8ruk7.worf.replit.dev";
         this.socket = io(serverUrl, { transports: ["websocket"] });
 
         this.add.text(this.cameras.main.width / 2, 50, 'Multiplayer Lobby', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
