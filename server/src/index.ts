@@ -26,7 +26,7 @@ const app = express();
 app.use(cors());
 
 const httpServer = createServer(app);
-// PERUBAHAN DI SINI: Izinkan koneksi hanya dari Vercel Anda
+// Konfigurasi CORS final untuk Vercel
 const io = new Server(httpServer, {
   cors: { 
     origin: "https://flappybird-multiplayer.vercel.app", // Ganti jika URL Vercel Anda berbeda
