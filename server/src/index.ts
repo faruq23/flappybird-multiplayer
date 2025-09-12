@@ -2,9 +2,10 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import path from "path";
 import { GameState, Pipe, Player } from '@shared/types';
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
 const TICK_MS = 50; // 20 TPS
 const WORLD_WIDTH = 800;
 const PIPE_SPEED = 120; // px/s
@@ -25,9 +26,19 @@ const INTERVAL_REDUCTION_PER_SCORE = 25;
 const app = express();
 app.use(cors());
 
-// Health check route
-app.get('/', (req, res) => {
+// Serve static files from client build
+app.use(express.static(path.join(__dirname, '../../client/dist')));
+
+// API health check route
+app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Flappy Bird Server is running' });
+});
+
+// Serve frontend for all non-API routes
+app.get('*', (req, res) => {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+    res.sendFile(path.join(__dirname, '../../client/dist/index.html'));
+  }
 });
 
 const httpServer = createServer(app);

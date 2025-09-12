@@ -27,7 +27,8 @@ class LobbyScene extends Phaser.Scene {
     }
 
     create() {
-        const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || "https://54edaee7-a439-4681-8d01-e01a88a53780-00-2oa9szzrx0z11.sisko.replit.dev";
+        // Use same domain for both frontend and backend since they're combined
+        const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || window.location.origin;
         this.socket = io(serverUrl, { transports: ["websocket"] });
 
         this.add.text(this.cameras.main.width / 2, 50, 'Multiplayer Lobby', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
