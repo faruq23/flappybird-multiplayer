@@ -4,7 +4,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { GameState, Pipe, Player } from '@shared/types';
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 const TICK_MS = 50; // 20 TPS
 const WORLD_WIDTH = 800;
 const PIPE_SPEED = 120; // px/s
@@ -26,11 +26,12 @@ const app = express();
 app.use(cors());
 
 const httpServer = createServer(app);
-// Konfigurasi CORS final untuk Vercel
+// Configuration for Replit environment
 const io = new Server(httpServer, {
   cors: { 
-    origin: "https://flappybird-multiplayer.vercel.app", // Ganti jika URL Vercel Anda berbeda
-    methods: ["GET", "POST"]
+    origin: `https://${process.env.REPLIT_DEV_DOMAIN}`,
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
