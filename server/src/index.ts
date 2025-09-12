@@ -31,14 +31,19 @@ app.get('/', (req, res) => {
 });
 
 const httpServer = createServer(app);
-// Configuration for Replit environment - handle undefined REPLIT_DEV_DOMAIN
-const corsOrigin = process.env.REPLIT_DEV_DOMAIN 
-  ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-  : true; // Allow all origins in development
+// Configuration for Replit and Vercel integration
+const allowedOrigins: string[] = [
+  "https://flappybird-multiplayer.vercel.app"
+];
+
+// Add Replit domain if available
+if (process.env.REPLIT_DEV_DOMAIN) {
+  allowedOrigins.push(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+}
 
 const io = new Server(httpServer, {
   cors: { 
-    origin: corsOrigin,
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -235,5 +240,5 @@ process.on('unhandledRejection', (reason, promise) => {
 // Bind to 0.0.0.0 to accept connections from any host
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`server on http://0.0.0.0:${PORT}`);
-  console.log(`CORS origin set to: ${corsOrigin}`);
+  console.log(`CORS origins set to: ${allowedOrigins.join(', ')}`);
 });
