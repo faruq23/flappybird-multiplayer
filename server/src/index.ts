@@ -25,11 +25,20 @@ const INTERVAL_REDUCTION_PER_SCORE = 25;
 const app = express();
 app.use(cors());
 
+// Health check route
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'Flappy Bird Server is running' });
+});
+
 const httpServer = createServer(app);
-// Configuration for Replit environment
+// Configuration for Replit environment - handle undefined REPLIT_DEV_DOMAIN
+const corsOrigin = process.env.REPLIT_DEV_DOMAIN 
+  ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+  : true; // Allow all origins in development
+
 const io = new Server(httpServer, {
   cors: { 
-    origin: `https://${process.env.REPLIT_DEV_DOMAIN}`,
+    origin: corsOrigin,
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -212,6 +221,19 @@ io.on("connection", (socket) => {
   });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`server on http://localhost:${PORT}`);
+// Add error handling for uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+// Bind to 0.0.0.0 to accept connections from any host
+httpServer.listen(PORT, '0.0.0.0', () => {
+  console.log(`server on http://0.0.0.0:${PORT}`);
+  console.log(`CORS origin set to: ${corsOrigin}`);
 });
