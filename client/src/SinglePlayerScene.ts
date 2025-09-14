@@ -14,6 +14,7 @@ export default class SinglePlayerScene extends Phaser.Scene {
     private score: number = 0;
     private scoreText!: Phaser.GameObjects.Text;
     private gameOverText!: Phaser.GameObjects.Text;
+    private background!: Phaser.GameObjects.TileSprite;
 
     // Game constants
     private readonly GRAVITY = 600;
@@ -29,6 +30,7 @@ export default class SinglePlayerScene extends Phaser.Scene {
     }
 
     preload() {
+        this.load.image("background", "Bg.png");
         this.load.spritesheet("bird", "/Bird.png", { frameWidth: 32, frameHeight: 24 });
         this.load.image("pipe", "/Pipe.png");
         this.load.image("pipeTop", "/InvertPipe.png");
@@ -37,6 +39,10 @@ export default class SinglePlayerScene extends Phaser.Scene {
     create() {
         this.isGameOver = false;
         this.score = 0;
+        // Create BackGround
+        const { width, height } = this.scale;
+        this.background = this.add.tileSprite(0, 0, width, height, "background");
+        this.background.setOrigin(0, 0);
 
         // Create Bird
         this.bird = this.physics.add.sprite(150, 300, 'bird').setOrigin(0.5);
@@ -75,6 +81,7 @@ export default class SinglePlayerScene extends Phaser.Scene {
     }
 
     update(time: number, delta: number) {
+        this.background.tilePositionX += 1;
         if (this.isGameOver) return;
 
         // Check for out of bounds

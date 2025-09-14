@@ -12,7 +12,8 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
   private gameOverText!: Phaser.GameObjects.Text;
   private backToMenuButton!: Phaser.GameObjects.Text;
   private spectatorText!: Phaser.GameObjects.Text;
-
+  private background!: Phaser.GameObjects.TileSprite;
+  
   constructor() {
     super({ key: "MultiplayerPlayScene" });
   }
@@ -24,6 +25,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
   private readonly INVINCIBLE_CHECK_TWEEN_KEY = "invincibleTween";
 
   preload() {
+    this.load.image("background", "/Bg.png");
     this.load.spritesheet("bird","/Bird.png", {
       frameWidth: 32,
       frameHeight: 24
@@ -33,6 +35,11 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
   }
 
   create() {
+    const { width, height } = this.scale;
+    this.background = this.add.tileSprite(0, 0, width, height, "background")
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(-1);
     this.pipeGraphics = this.add.graphics();
     this.anims.create({
       key: "fly",
@@ -182,5 +189,10 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
       const bottomPipe = this.add.image(p.x, gapBottom, "pipeBottom").setOrigin(0.5, 0);
       (bottomPipe as any).isPipe = true;
     });
+  }
+  update(time: number, delta: number) {
+    if (this.background) {
+      this.background.tilePositionX += 0.5; 
+    }
   }
 }
