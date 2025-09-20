@@ -23,7 +23,8 @@ const config: Phaser.Types.Core.GameConfig = {
   parent: "app",
   backgroundColor: "#87CEEB",
   physics: { default: "arcade" },
-  scene: initialScenes
+  scene: initialScenes,
+  dom: { createContainer: true}
 };
 
 const game = new Phaser.Game(config);
