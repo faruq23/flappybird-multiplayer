@@ -27,8 +27,8 @@ class LobbyScene extends Phaser.Scene {
     }
 
     create() {
-        const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || window.location.origin;
-        this.socket = io(serverUrl, { transports: ["websocket"] });
+        const serverUrl = (import.meta as any).env?.VITE_SERVER_URL || 'http://localhost:5000';
+        this.socket = io(serverUrl);
 
         const centerX = this.cameras.main.width / 2;
 
@@ -40,7 +40,7 @@ class LobbyScene extends Phaser.Scene {
 
         // Menggunakan Phaser.add.dom() untuk posisi yang sempurna
         this.roomInput = this.add.dom(centerX, 250).createFromHTML(
-            `<input type="text" placeholder="Enter Room ID" style="width: 200px; padding: 10px; font-size: 16px; border: none; border-radius: 5px;">`
+            `<input id="room-id-input" type="text" placeholder="Enter Room ID" style="width: 200px; padding: 10px; font-size: 16px; border: none; border-radius: 5px;">`
         ).setOrigin(0.5);
 
         this.joinRoomButton = this.add.text(centerX, 310, 'Join Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } })
@@ -62,11 +62,13 @@ class LobbyScene extends Phaser.Scene {
         this.createRoomButton.on('pointerdown', () => this.socket.emit('createRoom'));
 
         this.joinRoomButton.on('pointerdown', () => {
-            const inputElement = this.roomInput.node as HTMLInputElement;
-            const roomId = inputElement.value.trim();
-            if (roomId) {
-                this.socket.emit('joinRoom', roomId);
-                inputElement.value = '';
+            const inputElement = document.getElementById('room-id-input') as HTMLInputElement;
+            if (inputElement) {
+                const roomId = inputElement.value.trim();
+                if (roomId) {
+                    this.socket.emit('joinRoom', roomId);
+                    inputElement.value = '';
+                }
             }
         });
 
@@ -80,18 +82,8 @@ class LobbyScene extends Phaser.Scene {
         this.startButton.on('pointerdown', () => this.socket.emit('startGame', this.currentRoomId));
 
         // --- Server Event Listeners ---
-        this.socket.on('roomCreated', (roomId: string) => {
-            this.currentRoomId = roomId;
-            this.showRoomUI(roomId);
-        });
-        
         this.socket.on('init', (state: GameState) => {
-            const inputElement = this.roomInput.node as HTMLInputElement;
-            // Logic to determine the room ID when joining
-            if (!this.currentRoomId) {
-                this.currentRoomId = inputElement.value.trim();
-            }
-            
+            this.currentRoomId = state.roomId; // Set roomId from the definitive state
             this.players.clear();
             Object.values(state.players).forEach(p => this.players.set(p.id, p));
 

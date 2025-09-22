@@ -18,6 +18,8 @@ export interface Pipe {
 }
 
 export interface GameState {
+  roomId: string;
+  hostId: string;
   players: Record<string, Player>;
   pipes: Pipe[];
   tick: number;

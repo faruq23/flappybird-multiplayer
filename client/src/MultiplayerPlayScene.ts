@@ -48,16 +48,22 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
       repeat: -1
     });
     this.meId = this.socket.id ?? null;
-    
+
     this.socket.on("init", (state: GameState) => {
-      console.log("Received initial game state:", state);
+      // Reset UI to a clean state for the new round
+      this.gameOverText.setVisible(false);
+      this.backToMenuButton.setVisible(false);
+      this.restartButton.setVisible(false);
+      this.spectatorText.setVisible(false);
+
+      // Set initial state
       this.gameState = state;
       this.syncPlayers(state.players);
       this.drawPipes(state.pipes);
     });
 
     this.socket.on("update", (state: GameState) => {
-      if (!this.gameState) return;
+      if (!this.gameState) return; // Do nothing if the initial state hasn't arrived
       this.gameState = state;
       this.syncPlayers(state.players);
       this.drawPipes(state.pipes);
@@ -68,10 +74,17 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     this.add.text(10, 10, "Flappy Multiplayer — click or SPACE to flap", { fontSize: "14px", color: "#000" });
     this.gameOverText = this.add.text(400, 300, "Game Over!", { fontSize: "32px", color: "#ff0000", align: "center" }).setOrigin(0.5).setVisible(false);
     this.backToMenuButton = this.add.text(400, 350, "Back to Menu", { fontSize: "24px", color: "#fff", backgroundColor: "#333", padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
-    
+    this.restartButton = this.add.text(400, 400, "Restart Game", { fontSize: "24px", color: "#fff", backgroundColor: "#28a745", padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
+
     this.backToMenuButton.on('pointerdown', () => {
         this.socket.disconnect();
         this.scene.start('MainMenuScene');
+    });
+
+    this.restartButton.on('pointerdown', () => {
+      if (this.gameState) {
+        this.socket.emit('restartGame', this.gameState.roomId);
+      }
     });
 
     // --- PERUBAHAN 2: Buat objek teks untuk penonton ---
@@ -151,30 +164,25 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
       }
     }
 
-    // --- PERUBAHAN 3: Ganti total logika Game Over di sini ---
-    if (this.meId) {
+    if (this.meId && this.gameState) {
         const me = players[this.meId];
         const allPlayers = Object.values(players);
-        // Cek jika semua pemain sudah mati (dan ada pemain di room)
         const areAllPlayersDead = allPlayers.length > 0 && allPlayers.every(p => !p.alive);
+        const amIHost = this.meId === this.gameState.hostId;
 
         if (me && !me.alive && !areAllPlayersDead) {
-            // Jika SAYA mati TAPI game belum berakhir, tampilkan teks penonton
             this.spectatorText.setVisible(true);
         }
 
         if (areAllPlayersDead) {
-            // Jika SEMUA pemain mati, baru tampilkan Game Over
             this.gameOverText.setVisible(true);
             this.backToMenuButton.setVisible(true);
-            this.spectatorText.setVisible(false); // Sembunyikan teks penonton jika muncul bersamaan
-        } else {
-            // Jika masih ada pemain yang hidup, pastikan Game Over disembunyikan
-            this.gameOverText.setVisible(false);
-            this.backToMenuButton.setVisible(false);
-        }
+            this.spectatorText.setVisible(false);
+            if (amIHost) {
+              this.restartButton.setVisible(true);
+            }
+        } 
     }
-    // --- AKHIR DARI BLOK PERUBAHAN ---
   }
 
   private drawPipes(pipes: Pipe[]) {

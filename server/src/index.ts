@@ -11,7 +11,7 @@ const WORLD_WIDTH = 800;
 const PIPE_SPEED = 120; // px/s
 const START_X = 150;
 const START_Y = 300;
-const INVINCIBLE_MS = 2000;
+const INVINCIBLE_MS = 5000;
 const BIRD_HALF_W = 16;
 const PIPE_W = 64;
 
@@ -44,7 +44,9 @@ app.get('*', (req, res) => {
 const httpServer = createServer(app);
 // Configuration for Replit and Vercel integration
 const allowedOrigins: string[] = [
-  "https://flappybird-multiplayer.vercel.app"
+  "https://flappybird-multiplayer.vercel.app",
+  "http://localhost:5001",
+  "http://127.0.0.1:5001"
 ];
 
 // Add Replit domain if available
@@ -60,7 +62,7 @@ const io = new Server(httpServer, {
   }
 });
 
-const rooms: Record<string, { state: GameState; interval: NodeJS.Timeout; lastPipeAt: number }> = {};
+const rooms: Record<string, { state: GameState; hostId: string; interval: NodeJS.Timeout; lastPipeAt: number }> = {};
 
 function spawnPipe(state: GameState): void {
   const livingPlayers = Object.values(state.players).filter(p => p.alive);
@@ -119,38 +121,36 @@ function checkCollision(player: Player, pipes: Pipe[]): boolean {
 io.on("connection", (socket) => {
   console.log("connected:", socket.id);
 
-  const joinGame = (roomId: string) => {
-    const room = rooms[roomId];
-    if (!room) {
-      socket.emit("roomNotFound");
-      return;
-    }
-    socket.join(roomId);
-    const id = socket.id;
-    const playerCount = Object.keys(room.state.players).length;
-    room.state.players[id] = {
-      id,
-      name: `player-${playerCount + 1}`,
-      x: START_X,
-      y: START_Y,
-      vy: 0,
-      score: 0,
-      alive: true,
-      invincibleUntil: Date.now() + INVINCIBLE_MS
-    };
-    socket.emit("init", room.state); 
-    socket.to(roomId).emit("playerJoined", room.state.players[id]);
-  };
-
   socket.on("createRoom", () => {
     let roomId = Math.random().toString(36).slice(2, 8);
     while(rooms[roomId]) {
       roomId = Math.random().toString(36).slice(2, 8);
     }
     
-    const newState: GameState = { players: {}, pipes: [], tick: 0, started: false };
+    const creatorId = socket.id;
+    const newState: GameState = { 
+        roomId: roomId,
+        hostId: creatorId,
+        players: {
+            [creatorId]: { // Add creator immediately
+                id: creatorId,
+                name: `player-1`,
+                x: START_X,
+                y: START_Y,
+                vy: 0,
+                score: 0,
+                alive: true,
+                invincibleUntil: Date.now() + INVINCIBLE_MS
+            }
+        }, 
+        pipes: [], 
+        tick: 0, 
+        started: false 
+    };
+
     const newRoom = {
       state: newState,
+      hostId: creatorId, // Track the host
       interval: setInterval(() => {
         if (!newRoom.state.started) return;
 
@@ -158,8 +158,19 @@ io.on("connection", (socket) => {
         newState.tick++;
         Object.values(newState.players).forEach((p) => {
           if (!p.alive) return;
-          p.vy += 600 * (dt / 1000);
-          p.y += p.vy * (dt / 1000);
+
+          const isInvincible = p.invincibleUntil && Date.now() < p.invincibleUntil;
+
+          if (isInvincible) {
+            // While invincible, hover in place vertically
+            p.vy = 0;
+            p.y = START_Y;
+          } else {
+            // Normal gravity
+            p.vy += 600 * (dt / 1000);
+            p.y += p.vy * (dt / 1000);
+          }
+
           newState.pipes.forEach((pipe) => {
             const passed = pipe.x + PIPE_W / 2 < p.x - BIRD_HALF_W;
             if (passed && !pipe.passedBy[p.id]) {
@@ -179,16 +190,37 @@ io.on("connection", (socket) => {
       lastPipeAt: Date.now()
     };
     rooms[roomId] = newRoom;
-    socket.emit("roomCreated", roomId);
-    joinGame(roomId);
+
+    socket.join(roomId);
+    socket.emit("init", newState);
   });
 
   socket.on("joinRoom", (roomId: string) => {
-    if (rooms[roomId]) {
-      joinGame(roomId);
-    } else {
+    const targetRoomId = roomId.toLowerCase();
+    const room = rooms[targetRoomId];
+    if (!room) {
       socket.emit("roomNotFound");
+      return;
     }
+
+    socket.join(targetRoomId);
+    const joinerId = socket.id;
+    const playerCount = Object.keys(room.state.players).length;
+    const newPlayer: Player = {
+        id: joinerId,
+        name: `player-${playerCount + 1}`,
+        x: START_X,
+        y: START_Y,
+        vy: 0,
+        score: 0,
+        alive: true,
+        invincibleUntil: Date.now() + INVINCIBLE_MS
+    };
+    room.state.players[joinerId] = newPlayer;
+    room.state.roomId = targetRoomId; // Ensure roomId is on the state
+
+    socket.emit("init", room.state); // Send state to joiner
+    socket.to(targetRoomId).emit("playerJoined", newPlayer); // Tell others about joiner
   });
 
   socket.on("startGame", (roomId: string) => {
@@ -200,13 +232,42 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("clientReady", () => {
-    for (const roomId in rooms) {
-      if (rooms[roomId].state.players[socket.id]) {
-        console.log(`Client ${socket.id} is ready. Sending init state for room ${roomId}.`);
-        socket.emit("init", rooms[roomId].state);
+  socket.on('restartGame', (roomId: string) => {
+    const room = rooms[roomId];
+    // Only allow the host to restart
+    if (room && room.hostId === socket.id) {
+      console.log(`Restarting game for room ${roomId}`);
+
+      // Reset all players
+      Object.values(room.state.players).forEach(p => {
+        p.alive = true;
+        p.score = 0;
+        p.x = START_X;
+        p.y = START_Y;
+        p.vy = 0;
+        p.invincibleUntil = Date.now() + INVINCIBLE_MS;
+      });
+
+      // Clear pipes
+      room.state.pipes = [];
+
+      // Broadcast the reset state to all clients
+      io.to(roomId).emit('init', room.state);
+    }
+  });
+
+  socket.on('clientReady', () => {
+    let roomId: string | undefined;
+    for (const id in rooms) {
+      if (Object.keys(rooms[id].state.players).includes(socket.id)) {
+        roomId = id;
         break;
       }
+    }
+
+    if (roomId) {
+      console.log(`Client ${socket.id} is ready. Sending init state for room ${roomId}.`);
+      io.to(socket.id).emit('init', rooms[roomId].state);
     }
   });
 
