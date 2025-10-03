@@ -1,4 +1,4 @@
-// src/MultiplayerPlayScene.ts (Perbaikan Final dengan Delta Time)
+// src/MultiplayerPlayScene.ts
 
 import Phaser from "phaser";
 import { GameState, Player, Pipe } from "@shared/types"; 
@@ -14,6 +14,9 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     private gameState: GameState | null = null;
     private backToMenuButton!: Phaser.GameObjects.Text;
     private isReady: boolean = false;
+    
+    // Properti baru untuk grace period
+    private gameStartTime: number = 0;
 
     constructor() { super({ key: "MultiplayerPlayScene" }); }
 
@@ -32,6 +35,9 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
     create() {
         this.anims.create({ key: "fly", frames: this.anims.generateFrameNumbers("bird", { start: 0, end: 2}), frameRate: 10, repeat: -1 });
+        
+        // Catat waktu permainan dimulai
+        this.gameStartTime = Date.now();
         
         const roomRef = ref(database, `rooms/${this.roomId}`);
         this.roomListener = onValue(roomRef, (snapshot) => {
@@ -57,18 +63,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         }
     }
     
-    // =====================================================================
-    // PERBAIKAN FINAL DI SINI: Menggunakan 'time' dan 'delta'
-    // =====================================================================
     update(time: number, delta: number) {
         if (!this.isHost || !this.isReady || !this.gameState || !this.gameState.players) return;
 
-        // Faktor normalisasi untuk membuat fisika konsisten di semua frame rate
-        // 16.66 ms adalah durasi untuk 1 frame di 60 FPS
         const deltaFactor = delta / 16.66;
-
         const players = this.gameState.players;
-        const GRAVITY = 0.4; // Kurangi sedikit gravitasi agar lebih enak
+        const GRAVITY = 0.4;
         const FLAP_VELOCITY = -8;
 
         for (const playerId in players) {
@@ -80,12 +80,17 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 player.flap = false; 
             }
 
-            // Terapkan gravitasi dan pergerakan DENGAN deltaFactor
             player.velocityY += GRAVITY * deltaFactor;
             player.y += player.velocityY * deltaFactor;
 
-            if (player.y > 600 || player.y < 0) {
-                 player.alive = false;
+            // =====================================================================
+            // PERBAIKAN FINAL DI SINI: Tambahkan Grace Period 2 detik
+            // =====================================================================
+            // Pemain tidak bisa mati dalam 2 detik pertama permainan
+            if (Date.now() > this.gameStartTime + 2000) {
+                if (player.y > 600 || player.y < 0) {
+                     player.alive = false;
+                }
             }
         }
         
@@ -94,7 +99,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
     syncGameState(state: GameState) {
         if (!this.isReady || !state) return;
-
         (this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[]).forEach(c => c.destroy());
         (state.pipes || []).forEach(p => {
             const gapTop = p.gapY - p.gapHeight / 2; const gapBottom = p.gapY + p.gapHeight / 2;
@@ -102,7 +106,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             const bottomPipe = this.add.image(p.x, gapBottom, "pipeBottom").setOrigin(0.5, 0);
             (topPipe as any).isPipe = true; (bottomPipe as any).isPipe = true;
         });
-
         if (state.players) {
             Object.values(state.players).forEach(player => {
                 let bird = this.birds.get(player.id);
@@ -120,7 +123,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 }
             });
         }
-        
         const allPlayers = state.players ? Object.values(state.players) : [];
         const allPlayersDead = allPlayers.length > 0 && allPlayers.every(p => !p.alive);
         this.backToMenuButton.setVisible(allPlayersDead);
