@@ -1,3 +1,5 @@
+// src/MultiplayerPlayScene.ts (VERSI TES DIAGNOSTIK)
+
 import Phaser from "phaser";
 import { GameState, Player, Pipe } from "@shared/types"; 
 import { database } from "./firebase";
@@ -50,41 +52,42 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
 
     handleInput() {
-        if (this.isReady && this.gameState?.players?.[this.meId]?.alive) {
-            update(ref(database, `rooms/${this.roomId}/players/${this.meId}`), { lastFlapTime: Date.now() });
-        }
+        // Input tidak melakukan apa-apa di mode tes ini
     }
     
+    // =====================================================================
+    // FUNGSI UPDATE YANG DIUBAH TOTAL UNTUK TES
+    // =====================================================================
     update() {
         if (!this.isHost || !this.isReady || !this.gameState || !this.gameState.players) return;
 
+        // Ambil state pemain saat ini
         const players = this.gameState.players;
-        const GRAVITY = 0.5;
-        const FLAP_VELOCITY = -8;
 
+        // LOGIKA TES: Alih-alih fisika, kita hanya gerakkan burung ke kanan
         for (const playerId in players) {
             const player = players[playerId];
-            if (!player.alive) continue;
+            
+            // Jaga agar pemain selalu 'hidup' untuk tes ini
+            player.alive = true; 
+            
+            // Gerakkan burung ke kanan secara perlahan
+            player.x += 0.5;
 
-            if (player.lastFlapTime > player.processedFlapTime) {
-                player.velocityY = FLAP_VELOCITY;
-                player.processedFlapTime = player.lastFlapTime;
-            }
-            player.velocityY += GRAVITY;
-            player.y += player.velocityY;
-
-            if (player.y > 600 || player.y < 0) {
-                 player.alive = false;
+            // Jika keluar layar, reset posisinya
+            if (player.x > 820) {
+                player.x = -20;
             }
         }
         
+        // Kirim state baru yang sederhana ini ke Firebase
         update(ref(database, `rooms/${this.roomId}`), { players: this.gameState.players });
     }
 
     syncGameState(state: GameState) {
         if (!this.isReady || !state) return;
 
-        this.children.list.filter(c => (c as any).isPipe).forEach(c => c.destroy());
+        (this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[]).forEach(c => c.destroy());
         (state.pipes || []).forEach(p => {
             const gapTop = p.gapY - p.gapHeight / 2; const gapBottom = p.gapY + p.gapHeight / 2;
             const topPipe = this.add.image(p.x, gapTop, "pipeTop").setOrigin(0.5, 1);
