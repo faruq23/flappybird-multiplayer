@@ -9,7 +9,6 @@ class LobbyScene extends Phaser.Scene {
     private roomInput!: HTMLInputElement;
     private roomText!: Phaser.GameObjects.Text;
     private startButton!: Phaser.GameObjects.Text;
-    // ... (sisa properti sama)
     private createRoomButton!: Phaser.GameObjects.Text;
     private joinRoomButton!: Phaser.GameObjects.Text;
     private playerListText!: Phaser.GameObjects.Text;
@@ -29,7 +28,6 @@ class LobbyScene extends Phaser.Scene {
         this.add.text(this.cameras.main.width / 2, 50, 'Multiplayer Lobby', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
 
         this.roomInput = document.createElement('input');
-        // ... (kode UI tidak berubah)
         this.roomInput.type = 'text'; this.roomInput.placeholder = 'Enter Room ID';
         this.roomInput.style.position = 'absolute'; this.roomInput.style.top = '100px';
         this.roomInput.style.left = `${this.cameras.main.width / 2 - 100}px`;
@@ -64,7 +62,9 @@ class LobbyScene extends Phaser.Scene {
         });
 
         const backButton = this.add.text(10, 10, '< Back to Home', { fontSize: '18px', color: '#fff' }).setInteractive();
-        backButton.on('pointerdown', () => { this.cleanup(); this.scene.start('MainMenuScene'); });
+        
+        // PERBAIKAN: Panggil cleanup(true) saat kembali ke menu, untuk menghapus data pemain
+        backButton.on('pointerdown', () => { this.cleanup(true); this.scene.start('MainMenuScene'); });
         
         this.roomText = this.add.text(this.cameras.main.width / 2, 150, '', { fontSize: '28px', color: '#ffff00', align: 'center' }).setOrigin(0.5);
         this.playerListText = this.add.text(this.cameras.main.width / 2, 300, '', { fontSize: '20px', color: '#fff', align: 'center' }).setOrigin(0.5);
@@ -73,23 +73,20 @@ class LobbyScene extends Phaser.Scene {
         this.startButton.on('pointerdown', () => {
             if (!this.currentRoomId) return;
             const playersInLobby: Record<string, any> = Object.fromEntries(this.players.entries());
-            
             Object.values(playersInLobby).forEach(player => {
                 player.x = 100; player.y = 300; player.velocityY = 0; player.score = 0;
-                player.alive = true; player.flap = false; // Inisialisasi flap = false
+                player.alive = true; player.flap = false;
             });
-
             const initialPipes = [{ x: 500, gapY: 300, gapHeight: 150 }];
             update(ref(database, `rooms/${this.currentRoomId}`), { status: 'playing', players: playersInLobby, pipes: initialPipes });
         });
     }
 
     private listenToRoomUpdates(roomId: string) {
-        // ... (fungsi ini tidak berubah)
         const roomRef = ref(database, `rooms/${roomId}`);
         onDisconnect(ref(database, `rooms/${roomId}/players/${this.myPlayerId}`)).remove();
         this.roomListener = onValue(roomRef, (snapshot) => {
-            if (!snapshot.exists()) { this.cleanup(); this.scene.start('MainMenuScene'); return; }
+            if (!snapshot.exists()) { this.cleanup(true); this.scene.start('MainMenuScene'); return; }
             const roomData = snapshot.val();
             const playersData = roomData.players || {};
             this.players.clear();
@@ -97,25 +94,34 @@ class LobbyScene extends Phaser.Scene {
             this.updatePlayerListText();
             const isHost = roomData.hostId === this.myPlayerId;
             if (roomData.status === 'playing') {
-                this.cleanup();
+                // PERBAIKAN: Panggil cleanup(false) saat mulai game, agar data pemain TIDAK dihapus
+                this.cleanup(false);
                 this.scene.start('MultiplayerPlayScene', { roomId: this.currentRoomId, playerId: this.myPlayerId, isHost: isHost });
             }
         });
     }
-    // ... (sisa fungsi tidak berubah)
+
     showRoomUI(roomId: string, isHost: boolean = true) {
         this.roomInput.style.display = 'none'; this.createRoomButton.setVisible(false); this.joinRoomButton.setVisible(false);
         this.roomText.setText(`Room ID: ${roomId}`);
         if (isHost) { this.startButton.setVisible(true); }
     }
+
     updatePlayerListText() {
         const playerNames = Array.from(this.players.values()).map(p => p.name || `Player ${p.id.substring(0,3)}`);
         this.playerListText.setText('Players in room:\n' + playerNames.join('\n'));
     }
-    cleanup() {
+
+    // =====================================================================
+    // PERBAIKAN FINAL DI SINI
+    // =====================================================================
+    cleanup(deletePlayerData: boolean) {
         if (this.roomInput?.parentNode) { this.roomInput.parentNode.removeChild(this.roomInput); }
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
-        if (this.currentRoomId && this.myPlayerId) { set(ref(database, `rooms/${this.currentRoomId}/players/${this.myPlayerId}`), null); }
+        // Hanya hapus data pemain jika diminta (misal: saat kembali ke menu utama)
+        if (deletePlayerData && this.currentRoomId && this.myPlayerId) {
+             set(ref(database, `rooms/${this.currentRoomId}/players/${this.myPlayerId}`), null);
+        }
     }
 }
 
