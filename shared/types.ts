@@ -1,15 +1,12 @@
-// shared/types.ts
-
 export interface Player {
   id: string;
   name: string;
   x: number;
   y: number;
-  velocityY: number; // Kita akan gunakan 'velocityY' agar konsisten
+  velocityY: number;
   score: number;
   alive: boolean;
   invincibleUntil: number;
-  // Properti krusial untuk input
   lastFlapTime: number;
   processedFlapTime: number;
 }

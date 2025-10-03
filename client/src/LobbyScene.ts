@@ -1,5 +1,3 @@
-// src/LobbyScene.ts
-
 import Phaser from 'phaser';
 import { database } from './firebase';
 import { ref, set, onValue, get, update, Unsubscribe, onDisconnect } from "firebase/database";

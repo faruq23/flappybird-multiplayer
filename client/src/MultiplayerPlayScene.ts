@@ -1,5 +1,3 @@
-// src/MultiplayerPlayScene.ts
-
 import Phaser from "phaser";
 import { GameState, Player, Pipe } from "@shared/types"; 
 import { database } from "./firebase";
@@ -37,10 +35,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.roomListener = onValue(roomRef, (snapshot) => {
             const state = snapshot.val();
             if (state) {
-                if (!this.isReady) {
-                    this.isReady = true;
-                    console.log("--- Game state is now READY. ---");
-                }
+                if (!this.isReady) { this.isReady = true; }
                 this.gameState = state;
                 this.syncGameState(this.gameState);
             }
@@ -56,28 +51,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
     handleInput() {
         if (this.isReady && this.gameState?.players?.[this.meId]?.alive) {
-            const playerRef = ref(database, `rooms/${this.roomId}/players/${this.meId}`);
-            update(playerRef, { lastFlapTime: Date.now() });
+            update(ref(database, `rooms/${this.roomId}/players/${this.meId}`), { lastFlapTime: Date.now() });
         }
     }
     
     update() {
-        // =====================================================================
-        // BAGIAN DIAGNOSTIK BARU
-        // =====================================================================
-        if (!this.isHost) {
-            return; // Guest tidak menjalankan game loop, ini normal.
-        }
-        if (!this.isReady) {
-            console.log("[UPDATE] Waiting for game state... (isReady is false)");
-            return;
-        }
-        if (!this.gameState || !this.gameState.players) {
-            console.log("[UPDATE] Exiting loop because gameState or players is missing.");
-            return;
-        }
-        // Jika kode sampai di sini, berarti semua validasi lolos.
-        // =====================================================================
+        if (!this.isHost || !this.isReady || !this.gameState || !this.gameState.players) return;
 
         const players = this.gameState.players;
         const GRAVITY = 0.5;
@@ -103,9 +82,8 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
 
     syncGameState(state: GameState) {
-        if (!state) return;
+        if (!this.isReady || !state) return;
 
-        // Gambar pipa (jika ada)
         this.children.list.filter(c => (c as any).isPipe).forEach(c => c.destroy());
         (state.pipes || []).forEach(p => {
             const gapTop = p.gapY - p.gapHeight / 2; const gapBottom = p.gapY + p.gapHeight / 2;
@@ -114,14 +92,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             (topPipe as any).isPipe = true; (bottomPipe as any).isPipe = true;
         });
 
-        // Gambar pemain (jika ada)
         if (state.players) {
             Object.values(state.players).forEach(player => {
                 let bird = this.birds.get(player.id);
                 if (!bird) {
                     bird = this.add.sprite(player.x, player.y, "bird").setOrigin(0.5);
                     this.birds.set(player.id, bird);
-                    bird.anims.play("fly", true);
                 }
                 bird.setPosition(player.x, player.y);
                 if (player.alive) {
@@ -133,8 +109,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 }
             });
         }
-
-        // Cek kondisi game over (jika ada pemain)
+        
         const allPlayers = state.players ? Object.values(state.players) : [];
         const allPlayersDead = allPlayers.length > 0 && allPlayers.every(p => !p.alive);
         this.backToMenuButton.setVisible(allPlayersDead);
