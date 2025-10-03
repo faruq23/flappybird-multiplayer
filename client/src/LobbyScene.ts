@@ -1,3 +1,5 @@
+// src/LobbyScene.ts
+
 import Phaser from 'phaser';
 import { database } from './firebase';
 import { ref, set, onValue, get, update, Unsubscribe, onDisconnect } from "firebase/database";
@@ -7,6 +9,7 @@ class LobbyScene extends Phaser.Scene {
     private roomInput!: HTMLInputElement;
     private roomText!: Phaser.GameObjects.Text;
     private startButton!: Phaser.GameObjects.Text;
+    // ... (sisa properti sama)
     private createRoomButton!: Phaser.GameObjects.Text;
     private joinRoomButton!: Phaser.GameObjects.Text;
     private playerListText!: Phaser.GameObjects.Text;
@@ -26,6 +29,7 @@ class LobbyScene extends Phaser.Scene {
         this.add.text(this.cameras.main.width / 2, 50, 'Multiplayer Lobby', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
 
         this.roomInput = document.createElement('input');
+        // ... (kode UI tidak berubah)
         this.roomInput.type = 'text'; this.roomInput.placeholder = 'Enter Room ID';
         this.roomInput.style.position = 'absolute'; this.roomInput.style.top = '100px';
         this.roomInput.style.left = `${this.cameras.main.width / 2 - 100}px`;
@@ -52,14 +56,10 @@ class LobbyScene extends Phaser.Scene {
             const roomId = this.roomInput.value.trim().toUpperCase();
             if (!roomId) return;
             const roomRef = ref(database, `rooms/${roomId}`);
-            const roomSnapshot = await get(roomRef);
-            if (roomSnapshot.exists()) {
+            if ((await get(roomRef)).exists()) {
                 const playerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}` };
                 await set(ref(database, `rooms/${roomId}/players/${this.myPlayerId}`), playerLobbyData);
                 this.currentRoomId = roomId; this.listenToRoomUpdates(roomId); this.showRoomUI(roomId, false);
-            } else {
-                const errorText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height - 50, 'Room not found!', { fontSize: '20px', color: '#ff0000' }).setOrigin(0.5);
-                this.time.delayedCall(3000, () => errorText.destroy());
             }
         });
 
@@ -76,16 +76,16 @@ class LobbyScene extends Phaser.Scene {
             
             Object.values(playersInLobby).forEach(player => {
                 player.x = 100; player.y = 300; player.velocityY = 0; player.score = 0;
-                player.alive = true; player.invincibleUntil = 0;
-                player.lastFlapTime = 0; player.processedFlapTime = 0;
+                player.alive = true; player.flap = false; // Inisialisasi flap = false
             });
 
-            const initialPipes = [{ x: 500, gapY: 300, gapHeight: 150 }, { x: 800, gapY: 350, gapHeight: 150 }];
+            const initialPipes = [{ x: 500, gapY: 300, gapHeight: 150 }];
             update(ref(database, `rooms/${this.currentRoomId}`), { status: 'playing', players: playersInLobby, pipes: initialPipes });
         });
     }
 
     private listenToRoomUpdates(roomId: string) {
+        // ... (fungsi ini tidak berubah)
         const roomRef = ref(database, `rooms/${roomId}`);
         onDisconnect(ref(database, `rooms/${roomId}/players/${this.myPlayerId}`)).remove();
         this.roomListener = onValue(roomRef, (snapshot) => {
@@ -102,18 +102,16 @@ class LobbyScene extends Phaser.Scene {
             }
         });
     }
-
+    // ... (sisa fungsi tidak berubah)
     showRoomUI(roomId: string, isHost: boolean = true) {
         this.roomInput.style.display = 'none'; this.createRoomButton.setVisible(false); this.joinRoomButton.setVisible(false);
         this.roomText.setText(`Room ID: ${roomId}`);
         if (isHost) { this.startButton.setVisible(true); }
     }
-
     updatePlayerListText() {
         const playerNames = Array.from(this.players.values()).map(p => p.name || `Player ${p.id.substring(0,3)}`);
         this.playerListText.setText('Players in room:\n' + playerNames.join('\n'));
     }
-
     cleanup() {
         if (this.roomInput?.parentNode) { this.roomInput.parentNode.removeChild(this.roomInput); }
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }

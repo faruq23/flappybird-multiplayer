@@ -1,4 +1,4 @@
-// src/MultiplayerPlayScene.ts (VERSI TES DIAGNOSTIK)
+// src/MultiplayerPlayScene.ts
 
 import Phaser from "phaser";
 import { GameState, Player, Pipe } from "@shared/types"; 
@@ -52,49 +52,50 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
 
     handleInput() {
-        // Input tidak melakukan apa-apa di mode tes ini
+        if (this.isReady && this.gameState?.players?.[this.meId]?.alive) {
+            // Kirim 'event' flap sebagai boolean
+            update(ref(database, `rooms/${this.roomId}/players/${this.meId}`), { flap: true });
+        }
     }
     
-    // =====================================================================
-    // FUNGSI UPDATE YANG DIUBAH TOTAL UNTUK TES
-    // =====================================================================
     update() {
         if (!this.isHost || !this.isReady || !this.gameState || !this.gameState.players) return;
 
-        // Ambil state pemain saat ini
         const players = this.gameState.players;
+        const GRAVITY = 0.5;
+        const FLAP_VELOCITY = -8;
 
-        // LOGIKA TES: Alih-alih fisika, kita hanya gerakkan burung ke kanan
         for (const playerId in players) {
             const player = players[playerId];
-            
-            // Jaga agar pemain selalu 'hidup' untuk tes ini
-            player.alive = true; 
-            
-            // Gerakkan burung ke kanan secara perlahan
-            player.x += 0.5;
+            if (!player.alive) continue;
 
-            // Jika keluar layar, reset posisinya
-            if (player.x > 820) {
-                player.x = -20;
+            // LOGIKA BARU YANG LEBIH SEDERHANA
+            if (player.flap) {
+                player.velocityY = FLAP_VELOCITY;
+                player.flap = false; // Langsung reset setelah diproses
+            }
+
+            player.velocityY += GRAVITY;
+            player.y += player.velocityY;
+
+            if (player.y > 600 || player.y < 0) {
+                 player.alive = false;
             }
         }
         
-        // Kirim state baru yang sederhana ini ke Firebase
         update(ref(database, `rooms/${this.roomId}`), { players: this.gameState.players });
     }
 
     syncGameState(state: GameState) {
+        // ... (fungsi ini tidak berubah dari versi sebelumnya)
         if (!this.isReady || !state) return;
-
-        (this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[]).forEach(c => c.destroy());
+        this.children.list.filter(c => (c as any).isPipe).forEach(c => c.destroy());
         (state.pipes || []).forEach(p => {
             const gapTop = p.gapY - p.gapHeight / 2; const gapBottom = p.gapY + p.gapHeight / 2;
             const topPipe = this.add.image(p.x, gapTop, "pipeTop").setOrigin(0.5, 1);
             const bottomPipe = this.add.image(p.x, gapBottom, "pipeBottom").setOrigin(0.5, 0);
             (topPipe as any).isPipe = true; (bottomPipe as any).isPipe = true;
         });
-
         if (state.players) {
             Object.values(state.players).forEach(player => {
                 let bird = this.birds.get(player.id);
@@ -112,7 +113,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 }
             });
         }
-        
         const allPlayers = state.players ? Object.values(state.players) : [];
         const allPlayersDead = allPlayers.length > 0 && allPlayers.every(p => !p.alive);
         this.backToMenuButton.setVisible(allPlayersDead);
@@ -122,3 +122,5 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
     }
 }
+
+export default MultiplayerPlayScene;

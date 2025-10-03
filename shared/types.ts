@@ -1,3 +1,5 @@
+// @shared/types.ts
+
 export interface Player {
   id: string;
   name: string;
@@ -6,9 +8,9 @@ export interface Player {
   velocityY: number;
   score: number;
   alive: boolean;
-  invincibleUntil: number;
-  lastFlapTime: number;
-  processedFlapTime: number;
+  
+  // Hapus timestamp, ganti dengan ini:
+  flap: boolean; 
 }
 
 export interface Pipe {
