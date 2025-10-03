@@ -1,4 +1,4 @@
-// src/MultiplayerPlayScene.ts
+// src/MultiplayerPlayScene.ts (Lengkap dengan Log Input)
 
 import Phaser from "phaser";
 import { GameState, Player, Pipe } from "@shared/types"; 
@@ -14,10 +14,10 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     private gameState: GameState | null = null;
     private isReady: boolean = false;
     private gameStartTime: number = 0;
-
-    // Properti UI baru untuk Game Over dan Restart
-    private gameOverText!: Phaser.GameObjects.Text;
+    
+    // Properti UI
     private backToMenuButton!: Phaser.GameObjects.Text;
+    private gameOverText!: Phaser.GameObjects.Text;
     private restartButton!: Phaser.GameObjects.Text;
 
     constructor() { super({ key: "MultiplayerPlayScene" }); }
@@ -53,15 +53,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.input.on("pointerdown", () => this.handleInput());
         
         this.add.text(10, 10, "Flappy Multiplayer — click or SPACE to flap", { fontSize: "14px", color: "#000" });
-
-        // --- Inisialisasi Teks dan Tombol Game Over ---
         this.gameOverText = this.add.text(400, 250, "Game Over!", { fontSize: "48px", color: "#ff0000", align: "center" }).setOrigin(0.5).setDepth(1).setVisible(false);
         this.backToMenuButton = this.add.text(400, 350, "Back to Menu", { fontSize: "24px", color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
         this.restartButton = this.add.text(400, 300, "Restart Game", { fontSize: "24px", color: '#fff', backgroundColor: '#28a745', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
-
+        
         this.backToMenuButton.on('pointerdown', () => { this.cleanup(); this.scene.start('MainMenuScene'); });
         
-        // Hanya Host yang bisa menekan tombol Restart
         if (this.isHost) {
             this.restartButton.on('pointerdown', () => this.restartGame());
         }
@@ -69,6 +66,8 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
     handleInput() {
         if (this.isReady && this.gameState?.players?.[this.meId]?.alive) {
+            // LOG 1: Cek apakah input terkirim
+            console.log(`[CLIENT ${this.meId}] Flap input sent to Firebase.`);
             update(ref(database, `rooms/${this.roomId}/players/${this.meId}`), { flap: true });
         }
     }
@@ -78,7 +77,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
         const deltaFactor = delta / 16.66;
         const players = this.gameState.players;
-        const pipes = this.gameState.pipes;
         const GRAVITY = 0.4;
         const FLAP_VELOCITY = -8;
         const PIPE_SPEED = 2;
@@ -88,6 +86,8 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             if (!player.alive) continue;
 
             if (player.flap) {
+                // LOG 2: Cek apakah Host memproses input
+                console.log(`[HOST] Processing flap for player: ${playerId}`);
                 player.velocityY = FLAP_VELOCITY;
                 player.flap = false; 
             }
@@ -107,11 +107,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         }
         this.gameState.pipes = pipes.filter(p => p.x > -50);
         if (lastPipe && lastPipe.x < 600) {
-             this.gameState.pipes.push({
-                 x: 900,
-                 gapY: Math.floor(Math.random() * 300) + 150,
-                 gapHeight: 150
-             });
+             this.gameState.pipes.push({ x: 900, gapY: Math.floor(Math.random() * 300) + 150, gapHeight: 150 });
         }
         
         update(ref(database, `rooms/${this.roomId}`), { 
@@ -122,7 +118,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
     syncGameState(state: GameState) {
         if (!this.isReady || !state) return;
-
+        
         (this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[]).forEach(c => c.destroy());
         (state.pipes || []).forEach(p => {
             const gapTop = p.gapY - p.gapHeight / 2; const gapBottom = p.gapY + p.gapHeight / 2;
@@ -152,16 +148,13 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         const allPlayers = state.players ? Object.values(state.players) : [];
         const allPlayersDead = allPlayers.length > 0 && allPlayers.every(p => !p.alive);
 
-        // --- Logika Menampilkan Tampilan Game Over ---
         this.gameOverText.setVisible(allPlayersDead);
         this.backToMenuButton.setVisible(allPlayersDead);
-        // Tombol restart hanya muncul untuk Host
         if (this.isHost) {
             this.restartButton.setVisible(allPlayersDead);
         }
     }
-
-    // --- Fungsi Baru untuk Me-restart Game ---
+    
     private restartGame() {
         if (!this.isHost || !this.gameState) return;
 
@@ -178,13 +171,11 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
         const initialPipes = [{ x: 500, gapY: 300, gapHeight: 150 }];
         
-        // Reset state di Firebase
         update(ref(database, `rooms/${this.roomId}`), {
             players: playersToReset,
             pipes: initialPipes
         });
-
-        // Reset waktu mulai game
+        
         this.gameStartTime = Date.now();
     }
     
