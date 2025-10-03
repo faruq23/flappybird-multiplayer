@@ -1,25 +1,26 @@
+// shared/types.ts
+
 export interface Player {
   id: string;
   name: string;
   x: number;
   y: number;
-  vy: number;
+  velocityY: number; // Kita akan gunakan 'velocityY' agar konsisten
   score: number;
   alive: boolean;
-  invincibleUntil?: number;
+  invincibleUntil: number;
+  // Properti krusial untuk input
+  lastFlapTime: number;
+  processedFlapTime: number;
 }
 
 export interface Pipe {
-  id: string;
   x: number;
   gapY: number;
   gapHeight: number;
-  passedBy: Record<string, boolean>;
 }
 
 export interface GameState {
   players: Record<string, Player>;
   pipes: Pipe[];
-  tick: number;
-  started: boolean;
 }

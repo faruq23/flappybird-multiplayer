@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "firebase": "^12.3.0",
     "phaser": "^3.70.0",
     "socket.io-client": "^4.8.1"
   },
