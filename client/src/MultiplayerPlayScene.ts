@@ -3,7 +3,7 @@
 import Phaser from "phaser";
 import { GameState, Player } from "@shared/types"; 
 import { database } from "./firebase";
-import { ref, onValue, update, Unsubscribe, set, onDisconnect } from "firebase/database";
+import { ref, onValue, update, Unsubscribe, set, get } from "firebase/database";
 
 export default class MultiplayerPlayScene extends Phaser.Scene {
     private roomId!: string;
@@ -11,14 +11,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     private isHost: boolean = false;
     
     private roomListener: Unsubscribe | null = null;
-    private inputsListener: Unsubscribe | null = null; // Listener baru untuk input
+    private inputsListener: Unsubscribe | null = null;
 
     private birds: Map<string, Phaser.GameObjects.Sprite> = new Map();
     private gameState: GameState | null = null;
     private isReady: boolean = false;
-    private gameStartTime: number = 0;
     
-    // Properti UI
     private backToMenuButton!: Phaser.GameObjects.Text;
     private gameOverText!: Phaser.GameObjects.Text;
     private restartButton!: Phaser.GameObjects.Text;
@@ -40,12 +38,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
 
     create() {
-        this.anims.create({ key: "fly", frames: this.anims.generateFrameNumbers("bird", { start: 0, end: 2}), frameRate: 10, repeat: -1 });
-        this.gameStartTime = Date.now();
+        if (!this.anims.exists('fly')) {
+            this.anims.create({ key: "fly", frames: this.anims.generateFrameNumbers("bird", { start: 0, end: 2}), frameRate: 10, repeat: -1 });
+        }
         
-        // Listener untuk GameState utama
-        const roomRef = ref(database, `rooms/${this.roomId}/gameState`);
-        this.roomListener = onValue(roomRef, (snapshot) => {
+        const gameStateRef = ref(database, `rooms/${this.roomId}/gameState`);
+        this.roomListener = onValue(gameStateRef, (snapshot) => {
             const state = snapshot.val();
             if (state) {
                 if (!this.isReady) { this.isReady = true; }
@@ -54,23 +52,16 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             }
         });
 
-        // =====================================================================
-        // PERBAIKAN KUNCI 1: Host mendengarkan "kotak surat" input
-        // =====================================================================
         if (this.isHost) {
             const inputsRef = ref(database, `rooms/${this.roomId}/inputs`);
             this.inputsListener = onValue(inputsRef, (snapshot) => {
                 const inputs = snapshot.val();
                 if (inputs && this.gameState && this.gameState.players) {
                     for (const playerId in inputs) {
-                        if (inputs[playerId].flap) {
-                            // Proses input: set 'flap' di state lokal Host
-                            if (this.gameState.players[playerId]) {
-                                this.gameState.players[playerId].flap = true;
-                            }
+                        if (inputs[playerId].flap && this.gameState.players[playerId]) {
+                            this.gameState.players[playerId].flap = true;
                         }
                     }
-                    // Hapus semua input setelah diproses
                     set(inputsRef, null);
                 }
             });
@@ -79,20 +70,17 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.input.keyboard?.on("keydown-SPACE", () => this.handleInput());
         this.input.on("pointerdown", () => this.handleInput());
         
-        // ... (kode UI tidak berubah) ...
         this.add.text(10, 10, "Flappy Multiplayer — click or SPACE to flap", { fontSize: "14px", color: "#000" });
         this.gameOverText = this.add.text(400, 250, "Game Over!", { fontSize: "48px", color: "#ff0000", align: "center" }).setOrigin(0.5).setDepth(1).setVisible(false);
         this.backToMenuButton = this.add.text(400, 350, "Back to Menu", { fontSize: "24px", color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
         this.restartButton = this.add.text(400, 300, "Restart Game", { fontSize: "24px", color: '#fff', backgroundColor: '#28a745', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
-        this.backToMenuButton.on('pointerdown', () => { this.cleanup(); this.scene.start('MainMenuScene'); });
+        
+        this.backToMenuButton.on('pointerdown', () => { this.cleanup(); this.scene.start('LobbyScene'); });
         if (this.isHost) { this.restartButton.on('pointerdown', () => this.restartGame()); }
     }
 
     handleInput() {
         if (this.isReady && this.gameState?.players?.[this.meId]?.alive) {
-            // =====================================================================
-            // PERBAIKAN KUNCI 2: Client mengirim input ke "kotak surat"
-            // =====================================================================
             const inputRef = ref(database, `rooms/${this.roomId}/inputs/${this.meId}`);
             set(inputRef, { flap: true });
         }
@@ -119,9 +107,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             player.velocityY += GRAVITY * deltaFactor;
             player.y += player.velocityY * deltaFactor;
 
-            if (player.y > 600 || player.y < 0) {
-                 player.alive = false;
-            }
+            if (player.y > 600 || player.y < 0) player.alive = false;
 
             for (const pipe of pipes) {
                 const birdHalfWidth = 16; const birdHalfHeight = 12;
@@ -141,13 +127,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
              this.gameState.pipes.push({ x: 900, gapY: Math.floor(Math.random() * 300) + 150, gapHeight: 150 });
         }
         
-        // Host menulis kembali GameState yang sudah final
         update(ref(database, `rooms/${this.roomId}/gameState`), this.gameState);
     }
 
     syncGameState(state: GameState) {
-        // ... (Fungsi ini tidak perlu diubah, sudah benar) ...
         if (!this.isReady || !state) return;
+
         (this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[]).forEach(c => c.destroy());
         (state.pipes || []).forEach(p => {
             const gapTop = p.gapY - p.gapHeight / 2; const gapBottom = p.gapY + p.gapHeight / 2;
@@ -180,24 +165,30 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
     
     private restartGame() {
-        if (!this.isHost || !this.gameState) return;
-        const playersToReset = this.gameState.players;
-        Object.values(playersToReset).forEach(player => {
-            player.x = 100; player.y = 300; player.velocityY = 0;
-            player.score = 0; player.alive = true; player.flap = false;
+        if (!this.isHost) return;
+        
+        get(ref(database, `rooms/${this.roomId}/lobbyPlayers`)).then((snapshot) => {
+            if (snapshot.exists()) {
+                const lobbyPlayers = snapshot.val();
+                const playersToReset: Record<string, Player> = {};
+                for (const playerId in lobbyPlayers) {
+                    playersToReset[playerId] = {
+                        ...lobbyPlayers[playerId],
+                        x: 100, y: 300, velocityY: 0, score: 0,
+                        alive: true, flap: false
+                    };
+                }
+                const newGameState = { 
+                    players: playersToReset, 
+                    pipes: [{ x: 500, gapY: 300, gapHeight: 150 }]
+                };
+                set(ref(database, `rooms/${this.roomId}/gameState`), newGameState);
+            }
         });
-        const initialPipes = [{ x: 500, gapY: 300, gapHeight: 150 }];
-        
-        // Saat restart, kita set GameState baru
-        const newGameState = { players: playersToReset, pipes: initialPipes };
-        set(ref(database, `rooms/${this.roomId}/gameState`), newGameState);
-        
-        this.gameStartTime = Date.now();
     }
     
     cleanup() {
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
-        if (this.inputsListener) { this.inputsListener(); this.inputsListener = null; } // Matikan listener input
+        if (this.inputsListener) { this.inputsListener(); this.inputsListener = null; }
     }
 }
-
