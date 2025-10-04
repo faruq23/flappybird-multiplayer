@@ -21,9 +21,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     private gameOverText!: Phaser.GameObjects.Text;
     private restartButton!: Phaser.GameObjects.Text;
 
-    private readonly GRAVITY = 0.4;
-    private readonly FLAP_VELOCITY = -8;
-    private readonly PIPE_SPEED = 2;
+    // =====================================================================
+    // PERUBAHAN UTAMA: Menyesuaikan fisika agar terasa seperti Single-Player
+    // =====================================================================
+    private readonly GRAVITY = 0.3;         // Burung jatuh lebih lambat
+    private readonly FLAP_VELOCITY = -7;    // Lompatan lebih rendah dan terkontrol
+    private readonly PIPE_SPEED = 1.8;      // Pipa bergerak lebih lambat
 
     constructor() { super({ key: "MultiplayerPlayScene" }); }
 
@@ -48,15 +51,10 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         
         const gameStateRef = ref(database, `rooms/${this.roomId}/gameState`);
         
-        // =====================================================================
-        // PERBAIKAN KUNCI 1: Menghapus logika yang salah saat menerima state
-        // =====================================================================
         this.roomListener = onValue(gameStateRef, (snapshot) => {
             const state = snapshot.val();
             if (state) {
                 if (!this.isReady) { this.isReady = true; }
-                
-                // Cukup terima state dari server. Rekonsiliasi akan terjadi di syncGameState.
                 this.gameState = state;
                 this.syncGameState(this.gameState);
             }
@@ -144,7 +142,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             update(ref(database, `rooms/${this.roomId}/gameState`), this.gameState);
 
         } else {
-            // Logika prediksi LOKAL untuk CLIENT
             const me = this.gameState.players[this.meId];
             
             if (me && me.alive) {
@@ -162,20 +159,40 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                     }
                 }
             }
+            
+            const pipeSprites = this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[];
+            for (const pipeSprite of pipeSprites) {
+                pipeSprite.x -= this.PIPE_SPEED * deltaFactor;
+            }
         }
     }
 
     syncGameState(state: GameState) {
         if (!this.isReady || !state) return;
 
-        (this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[]).forEach(c => c.destroy());
-        (state.pipes || []).forEach(p => {
-            const gapTop = p.gapY - p.gapHeight / 2; const gapBottom = p.gapY + p.gapHeight / 2;
-            const topPipe = this.add.image(p.x, p.y, "pipeTop").setOrigin(0.5, 1).setY(gapTop);
-            const bottomPipe = this.add.image(p.x, p.y, "pipeBottom").setOrigin(0.5, 0).setY(gapBottom);
-            (topPipe as any).isPipe = true;
-            (bottomPipe as any).isPipe = true;
+        const pipeSprites = this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[];
+        (state.pipes || []).forEach((pipeData, index) => {
+            const topPipeSprite = pipeSprites[index * 2];
+            const bottomPipeSprite = pipeSprites[index * 2 + 1];
+            if (topPipeSprite && bottomPipeSprite) {
+                if (Math.abs(topPipeSprite.x - pipeData.x) > 0.5) {
+                    this.tweens.add({ targets: [topPipeSprite, bottomPipeSprite], x: pipeData.x, duration: 100, ease: 'Linear' });
+                }
+            } else {
+                const gapTop = pipeData.gapY - pipeData.gapHeight / 2;
+                const gapBottom = pipeData.gapY + pipeData.gapHeight / 2;
+                const topPipe = this.add.image(pipeData.x, gapTop, "pipeTop").setOrigin(0.5, 1);
+                const bottomPipe = this.add.image(pipeData.x, gapBottom, "pipeBottom").setOrigin(0.5, 0);
+                (topPipe as any).isPipe = true;
+                (bottomPipe as any).isPipe = true;
+            }
         });
+        
+        if(pipeSprites.length > (state.pipes || []).length * 2) {
+            for(let i = (state.pipes || []).length * 2; i < pipeSprites.length; i++) {
+                pipeSprites[i].destroy();
+            }
+        }
 
 
         if (state.players) {
@@ -186,23 +203,16 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                     this.birds.set(playerFromServer.id, bird);
                 }
                 
-                // =====================================================================
-                // PERBAIKAN KUNCI 2: Logika rekonsiliasi yang benar
-                // =====================================================================
                 if (playerFromServer.id === this.meId && !this.isHost) {
-                    // Jika kita client, kita hanya mengambil status 'alive' dari server
-                    // Posisi Y tetap kita kontrol secara lokal untuk kelancaran
                     const myLocalData = this.gameState!.players[this.meId];
                     if(myLocalData) {
                         myLocalData.alive = playerFromServer.alive;
-                        bird.setPosition(myLocalData.x, myLocalData.y); // Gunakan posisi Y lokal
+                        bird.setPosition(myLocalData.x, myLocalData.y);
                     }
                 } else {
-                    // Untuk pemain lain (atau jika kita host), percaya 100% pada server
                     bird.setPosition(playerFromServer.x, playerFromServer.y);
                 }
 
-                // Update visual berdasarkan status 'alive' yang sudah disinkronkan
                 const isAlive = this.gameState!.players[playerFromServer.id].alive;
                 if (isAlive) {
                     bird.clearTint();
