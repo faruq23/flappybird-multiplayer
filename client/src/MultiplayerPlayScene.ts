@@ -47,21 +47,17 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         }
         
         const gameStateRef = ref(database, `rooms/${this.roomId}/gameState`);
+        
+        // =====================================================================
+        // PERBAIKAN KUNCI 1: Menghapus logika yang salah saat menerima state
+        // =====================================================================
         this.roomListener = onValue(gameStateRef, (snapshot) => {
             const state = snapshot.val();
             if (state) {
                 if (!this.isReady) { this.isReady = true; }
                 
-                if (!this.isHost && this.gameState) {
-                    const myPlayerData = this.gameState.players[this.meId];
-                    this.gameState = state;
-                    if (myPlayerData) {
-                        this.gameState.players[this.meId] = myPlayerData;
-                    }
-                } else {
-                    this.gameState = state;
-                }
-
+                // Cukup terima state dari server. Rekonsiliasi akan terjadi di syncGameState.
+                this.gameState = state;
                 this.syncGameState(this.gameState);
             }
         });
@@ -111,7 +107,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         const deltaFactor = delta / 16.66;
         
         if (this.isHost) {
-            // Logika HOST (mengontrol seluruh permainan)
             const players = this.gameState.players;
             const pipes = this.gameState.pipes;
 
@@ -149,17 +144,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             update(ref(database, `rooms/${this.roomId}/gameState`), this.gameState);
 
         } else {
-            // Logika CLIENT (prediksi lokal)
+            // Logika prediksi LOKAL untuk CLIENT
             const me = this.gameState.players[this.meId];
             
             if (me && me.alive) {
                 me.velocityY += this.GRAVITY * deltaFactor;
                 me.y += me.velocityY * deltaFactor;
-
-                const myBirdSprite = this.birds.get(this.meId);
-                if (myBirdSprite) {
-                    myBirdSprite.setPosition(me.x, me.y);
-                }
 
                 if (me.y > 600 || me.y < 0) me.alive = false;
                 for (const pipe of this.gameState.pipes) {
@@ -172,66 +162,49 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                     }
                 }
             }
-            
-            // --- PERBAIKAN 1: Client memprediksi pergerakan SPRITE PIPA, bukan data ---
-            const pipeSprites = this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[];
-            for (const pipeSprite of pipeSprites) {
-                pipeSprite.x -= this.PIPE_SPEED * deltaFactor;
-            }
         }
     }
 
     syncGameState(state: GameState) {
         if (!this.isReady || !state) return;
 
-        const pipeSprites = this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[];
-        (state.pipes || []).forEach((pipeData, index) => {
-            const topPipeSprite = pipeSprites[index * 2];
-            const bottomPipeSprite = pipeSprites[index * 2 + 1];
-            if (topPipeSprite && bottomPipeSprite) {
-                // Hanya lakukan koreksi jika perlu (jika posisi lokal dan server berbeda jauh)
-                if (Math.abs(topPipeSprite.x - pipeData.x) > 0.5) {
-                    this.tweens.add({ targets: [topPipeSprite, bottomPipeSprite], x: pipeData.x, duration: 100, ease: 'Linear' });
-                }
-            } else {
-                const gapTop = pipeData.gapY - pipeData.gapHeight / 2;
-                const gapBottom = pipeData.gapY + pipeData.gapHeight / 2;
-                const topPipe = this.add.image(pipeData.x, gapTop, "pipeTop").setOrigin(0.5, 1);
-                const bottomPipe = this.add.image(pipeData.x, gapBottom, "pipeBottom").setOrigin(0.5, 0);
-                (topPipe as any).isPipe = true;
-                (bottomPipe as any).isPipe = true;
-            }
+        (this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[]).forEach(c => c.destroy());
+        (state.pipes || []).forEach(p => {
+            const gapTop = p.gapY - p.gapHeight / 2; const gapBottom = p.gapY + p.gapHeight / 2;
+            const topPipe = this.add.image(p.x, p.y, "pipeTop").setOrigin(0.5, 1).setY(gapTop);
+            const bottomPipe = this.add.image(p.x, p.y, "pipeBottom").setOrigin(0.5, 0).setY(gapBottom);
+            (topPipe as any).isPipe = true;
+            (bottomPipe as any).isPipe = true;
         });
-        
-        if(pipeSprites.length > (state.pipes || []).length * 2) {
-            for(let i = (state.pipes || []).length * 2; i < pipeSprites.length; i++) {
-                pipeSprites[i].destroy();
-            }
-        }
 
 
         if (state.players) {
-            Object.values(state.players).forEach(player => {
-                if (player.id === this.meId && !this.isHost) {
-                    const myLocalData = this.gameState!.players[this.meId];
-                    if (myLocalData) {
-                       myLocalData.x = player.x;
-                       // --- PERBAIKAN 2: Selalu percaya status 'alive' dari Host ---
-                       myLocalData.alive = player.alive;
-                    }
-                }
-
-                let bird = this.birds.get(player.id);
+            Object.values(state.players).forEach(playerFromServer => {
+                let bird = this.birds.get(playerFromServer.id);
                 if (!bird) {
-                    bird = this.add.sprite(player.x, player.y, "bird").setOrigin(0.5);
-                    this.birds.set(player.id, bird);
+                    bird = this.add.sprite(playerFromServer.x, playerFromServer.y, "bird").setOrigin(0.5);
+                    this.birds.set(playerFromServer.id, bird);
                 }
                 
-                if (player.id !== this.meId || this.isHost) {
-                   this.tweens.add({ targets: bird, x: player.x, y: player.y, duration: 100, ease: 'Linear' });
+                // =====================================================================
+                // PERBAIKAN KUNCI 2: Logika rekonsiliasi yang benar
+                // =====================================================================
+                if (playerFromServer.id === this.meId && !this.isHost) {
+                    // Jika kita client, kita hanya mengambil status 'alive' dari server
+                    // Posisi Y tetap kita kontrol secara lokal untuk kelancaran
+                    const myLocalData = this.gameState!.players[this.meId];
+                    if(myLocalData) {
+                        myLocalData.alive = playerFromServer.alive;
+                        bird.setPosition(myLocalData.x, myLocalData.y); // Gunakan posisi Y lokal
+                    }
+                } else {
+                    // Untuk pemain lain (atau jika kita host), percaya 100% pada server
+                    bird.setPosition(playerFromServer.x, playerFromServer.y);
                 }
 
-                if (player.alive) {
+                // Update visual berdasarkan status 'alive' yang sudah disinkronkan
+                const isAlive = this.gameState!.players[playerFromServer.id].alive;
+                if (isAlive) {
                     bird.clearTint();
                     if (!bird.anims.isPlaying) bird.anims.play("fly", true);
                 } else {
