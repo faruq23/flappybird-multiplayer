@@ -14,6 +14,7 @@ export interface Player {
 }
 
 export interface Pipe {
+  id: string;
   x: number;
   gapY: number;
   gapHeight: number;

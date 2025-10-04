@@ -1,7 +1,7 @@
 // src/MultiplayerPlayScene.ts
 
 import Phaser from "phaser";
-import { GameState, Player } from "@shared/types"; 
+import { GameState, Player, Pipe } from "@shared/types"; 
 import { database } from "./firebase";
 import { ref, onValue, update, Unsubscribe, set, get } from "firebase/database";
 
@@ -14,6 +14,9 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     private inputsListener: Unsubscribe | null = null;
 
     private birds: Map<string, Phaser.GameObjects.Sprite> = new Map();
+    // --- PERUBAHAN KUNCI 1: Ganti cara kita menyimpan sprite pipa ---
+    private pipeSprites: Map<string, { top: Phaser.GameObjects.Image, bottom: Phaser.GameObjects.Image }> = new Map();
+
     private gameState: GameState | null = null;
     private isReady: boolean = false;
     
@@ -21,12 +24,9 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     private gameOverText!: Phaser.GameObjects.Text;
     private restartButton!: Phaser.GameObjects.Text;
 
-    // =====================================================================
-    // PERUBAHAN UTAMA: Menyesuaikan fisika agar terasa seperti Single-Player
-    // =====================================================================
-    private readonly GRAVITY = 0.3;         // Burung jatuh lebih lambat
-    private readonly FLAP_VELOCITY = -7;    // Lompatan lebih rendah dan terkontrol
-    private readonly PIPE_SPEED = 1.8;      // Pipa bergerak lebih lambat
+    private readonly GRAVITY = 0.3;
+    private readonly FLAP_VELOCITY = -7;
+    private readonly PIPE_SPEED = 1.8;
 
     constructor() { super({ key: "MultiplayerPlayScene" }); }
 
@@ -36,6 +36,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.isHost = data.isHost;
         this.isReady = false;
         this.birds.clear();
+        this.pipeSprites.clear();
     }
 
     preload() {
@@ -50,7 +51,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         }
         
         const gameStateRef = ref(database, `rooms/${this.roomId}/gameState`);
-        
         this.roomListener = onValue(gameStateRef, (snapshot) => {
             const state = snapshot.val();
             if (state) {
@@ -106,7 +106,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         
         if (this.isHost) {
             const players = this.gameState.players;
-            const pipes = this.gameState.pipes;
+            const pipes = this.gameState.pipes || [];
 
             for (const playerId in players) {
                 const player = players[playerId];
@@ -135,8 +135,15 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             let lastPipe = pipes[pipes.length - 1];
             for (const pipe of pipes) { pipe.x -= this.PIPE_SPEED * deltaFactor; }
             this.gameState.pipes = pipes.filter(p => p.x > -50);
+
             if (!lastPipe || lastPipe.x < 600) {
-                 this.gameState.pipes.push({ x: 900, gapY: Math.floor(Math.random() * 300) + 150, gapHeight: 150 });
+                 // --- PERUBAHAN KUNCI 2: Memberi ID unik saat pipa dibuat ---
+                 this.gameState.pipes.push({ 
+                    id: `pipe_${Date.now()}_${Math.random()}`,
+                    x: 900, 
+                    gapY: Math.floor(Math.random() * 300) + 150, 
+                    gapHeight: 150 
+                });
             }
             
             update(ref(database, `rooms/${this.roomId}/gameState`), this.gameState);
@@ -149,7 +156,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 me.y += me.velocityY * deltaFactor;
 
                 if (me.y > 600 || me.y < 0) me.alive = false;
-                for (const pipe of this.gameState.pipes) {
+                for (const pipe of this.gameState.pipes || []) {
                     const birdHalfWidth = 16; const birdHalfHeight = 12;
                     const pipeHalfWidth = 26;
                     if (me.x + birdHalfWidth > pipe.x - pipeHalfWidth && me.x - birdHalfWidth < pipe.x + pipeHalfWidth) {
@@ -160,39 +167,47 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 }
             }
             
-            const pipeSprites = this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[];
-            for (const pipeSprite of pipeSprites) {
-                pipeSprite.x -= this.PIPE_SPEED * deltaFactor;
-            }
+            this.pipeSprites.forEach(pipePair => {
+                pipePair.top.x -= this.PIPE_SPEED * deltaFactor;
+                pipePair.bottom.x -= this.PIPE_SPEED * deltaFactor;
+            });
         }
     }
 
     syncGameState(state: GameState) {
         if (!this.isReady || !state) return;
 
-        const pipeSprites = this.children.list.filter(c => (c as any).isPipe) as Phaser.GameObjects.Image[];
-        (state.pipes || []).forEach((pipeData, index) => {
-            const topPipeSprite = pipeSprites[index * 2];
-            const bottomPipeSprite = pipeSprites[index * 2 + 1];
-            if (topPipeSprite && bottomPipeSprite) {
-                if (Math.abs(topPipeSprite.x - pipeData.x) > 0.5) {
-                    this.tweens.add({ targets: [topPipeSprite, bottomPipeSprite], x: pipeData.x, duration: 100, ease: 'Linear' });
-                }
-            } else {
+        // =====================================================================
+        // PERUBAHAN KUNCI 3: Logika sinkronisasi pipa ditulis ulang total
+        // =====================================================================
+        const incomingPipeIds = new Set((state.pipes || []).map(p => p.id));
+
+        // Hapus sprite pipa yang sudah tidak ada di data Host
+        this.pipeSprites.forEach((pipePair, pipeId) => {
+            if (!incomingPipeIds.has(pipeId)) {
+                pipePair.top.destroy();
+                pipePair.bottom.destroy();
+                this.pipeSprites.delete(pipeId);
+            }
+        });
+
+        // Tambah atau update sprite pipa yang ada di data Host
+        (state.pipes || []).forEach(pipeData => {
+            let pipePair = this.pipeSprites.get(pipeData.id);
+            if (!pipePair) {
+                // Pipa ini baru, buat spritenya
                 const gapTop = pipeData.gapY - pipeData.gapHeight / 2;
                 const gapBottom = pipeData.gapY + pipeData.gapHeight / 2;
                 const topPipe = this.add.image(pipeData.x, gapTop, "pipeTop").setOrigin(0.5, 1);
                 const bottomPipe = this.add.image(pipeData.x, gapBottom, "pipeBottom").setOrigin(0.5, 0);
-                (topPipe as any).isPipe = true;
-                (bottomPipe as any).isPipe = true;
+                
+                this.pipeSprites.set(pipeData.id, { top: topPipe, bottom: bottomPipe });
+            } else {
+                // Pipa ini sudah ada, lakukan koreksi posisi dengan halus
+                this.tweens.add({ targets: pipePair.top, x: pipeData.x, duration: 100, ease: 'Linear' });
+                this.tweens.add({ targets: pipePair.bottom, x: pipeData.x, duration: 100, ease: 'Linear' });
             }
         });
-        
-        if(pipeSprites.length > (state.pipes || []).length * 2) {
-            for(let i = (state.pipes || []).length * 2; i < pipeSprites.length; i++) {
-                pipeSprites[i].destroy();
-            }
-        }
 
 
         if (state.players) {
@@ -244,9 +259,14 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                         alive: true, flap: false
                     };
                 }
-                const newGameState = { 
+                const newGameState: GameState = { 
                     players: playersToReset, 
-                    pipes: [{ x: 500, gapY: 300, gapHeight: 150 }]
+                    pipes: [{ 
+                        id: `pipe_${Date.now()}`,
+                        x: 500, 
+                        gapY: 300, 
+                        gapHeight: 150 
+                    }]
                 };
                 set(ref(database, `rooms/${this.roomId}/gameState`), newGameState);
             }
@@ -258,4 +278,3 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         if (this.inputsListener) { this.inputsListener(); this.inputsListener = null; }
     }
 }
-
