@@ -92,7 +92,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             const inputRef = ref(database, `rooms/${this.roomId}/inputs/${this.meId}`);
             set(inputRef, { flap: true });
 
-            // Prediksi lokal tetap berjalan
             const me = this.localGameState.players[this.meId];
             if (me) {
                 me.velocityY = this.FLAP_VELOCITY;
@@ -103,6 +102,15 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     update(time: number, delta: number) {
         if (!this.isReady || !this.localGameState) return;
 
+        // --- PERBAIKAN 1: Hentikan simulasi jika game sudah berakhir ---
+        const allPlayers = Object.values(this.localGameState.players);
+        const allPlayersDead = allPlayers.length > 0 && allPlayers.every(p => !p.alive);
+
+        if (allPlayersDead) {
+            this.updateSprites(); // Tetap update UI
+            return; // Hentikan semua pergerakan
+        }
+
         const deltaFactor = delta / 16.66;
         const players = this.localGameState.players;
         const pipes = this.localGameState.pipes || [];
@@ -112,19 +120,16 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             const player = players[playerId];
             if (!player.alive) continue;
 
-            // Hanya Host yang memproses 'flap' dari data. Client memprosesnya di handleInput.
             if (this.isHost && player.flap) {
                 player.velocityY = this.FLAP_VELOCITY;
                 player.flap = false; 
             }
             
-            // Client hanya memprediksi dirinya sendiri
             if (playerId === this.meId || this.isHost) {
                 player.velocityY += this.GRAVITY * deltaFactor;
                 player.y += player.velocityY * deltaFactor;
             }
 
-            // Hanya Host yang berhak mematikan pemain
             if (this.isHost) {
                 if (player.y > 600 || player.y < 0) player.alive = false;
                 for (const pipe of pipes) {
@@ -138,10 +143,8 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             }
         }
 
-        // SEMUA client menggerakkan pipa
         for (const pipe of pipes) { pipe.x -= this.PIPE_SPEED * deltaFactor; }
         
-        // Hanya Host yang membuat dan menghapus data pipa
         if (this.isHost) {
             let lastPipe = pipes[pipes.length - 1];
             this.localGameState.pipes = pipes.filter(p => p.x > -50);
@@ -154,7 +157,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             update(ref(database, `rooms/${this.roomId}/gameState`), this.localGameState);
         }
 
-        // Update visual berdasarkan state lokal yang sudah diprediksi
         this.updateSprites();
     }
 
@@ -216,13 +218,22 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 this.birds.set(serverPlayer.id, bird);
             }
             
-            // Rekonsiliasi: Salin data dari server ke state lokal
-            if (this.localGameState!.players[serverPlayer.id]) {
-                if (serverPlayer.id !== this.meId || this.isHost) {
-                    this.localGameState!.players[serverPlayer.id].x = serverPlayer.x;
-                    this.localGameState!.players[serverPlayer.id].y = serverPlayer.y;
+            // --- PERBAIKAN 2: Rekonsiliasi yang lebih baik ---
+            const localPlayer = this.localGameState!.players[serverPlayer.id];
+            if (localPlayer) {
+                // Selalu percaya status 'alive' dari Host
+                localPlayer.alive = serverPlayer.alive;
+
+                // Untuk pemain lain, haluskan pergerakan mereka ke posisi dari Host
+                if (serverPlayer.id !== this.meId) {
+                    this.tweens.add({
+                        targets: this.birds.get(serverPlayer.id),
+                        x: serverPlayer.x,
+                        y: serverPlayer.y,
+                        duration: 100, // Durasi singkat untuk interpolasi
+                        ease: 'Linear'
+                    });
                 }
-                this.localGameState!.players[serverPlayer.id].alive = serverPlayer.alive;
             }
         });
     }
@@ -240,6 +251,8 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                     players: playersToReset, 
                     pipes: [{ id: `pipe_${Date.now()}`, x: 500, gapY: 300, gapHeight: 150 }]
                 };
+                // Hapus juga input lama agar tidak diproses saat restart
+                set(ref(database, `rooms/${this.roomId}/inputs`), null);
                 set(ref(database, `rooms/${this.roomId}/gameState`), newGameState);
             }
         });
