@@ -17,7 +17,7 @@ class MainMenuScene extends Phaser.Scene {
 
         singlePlayerButton.on('pointerdown', () => {
             // Ganti dengan scene single player Anda jika ada
-            // this.scene.start('SinglePlayerScene'); 
+            this.scene.start('SinglePlayerScene'); 
         });
 
         const multiplayerButton = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 60, 'Multiplayer', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } })

@@ -1,4 +1,4 @@
-// src/MultiplayerPlayScene.ts (Lengkap dengan Log Input)
+// src/MultiplayerPlayScene.ts
 
 import Phaser from "phaser";
 import { GameState, Player, Pipe } from "@shared/types"; 
@@ -27,6 +27,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.meId = data.playerId;
         this.isHost = data.isHost;
         this.isReady = false;
+        this.birds.clear();
     }
 
     preload() {
@@ -66,8 +67,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
     handleInput() {
         if (this.isReady && this.gameState?.players?.[this.meId]?.alive) {
-            // LOG 1: Cek apakah input terkirim
-            console.log(`[CLIENT ${this.meId}] Flap input sent to Firebase.`);
             update(ref(database, `rooms/${this.roomId}/players/${this.meId}`), { flap: true });
         }
     }
@@ -77,6 +76,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
         const deltaFactor = delta / 16.66;
         const players = this.gameState.players;
+        const pipes = this.gameState.pipes;
         const GRAVITY = 0.4;
         const FLAP_VELOCITY = -8;
         const PIPE_SPEED = 2;
@@ -86,8 +86,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             if (!player.alive) continue;
 
             if (player.flap) {
-                // LOG 2: Cek apakah Host memproses input
-                console.log(`[HOST] Processing flap for player: ${playerId}`);
                 player.velocityY = FLAP_VELOCITY;
                 player.flap = false; 
             }
@@ -99,6 +97,24 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                      player.alive = false;
                 }
             }
+
+            // =====================================================================
+            // PERBAIKAN: Menambahkan Logika Deteksi Tabrakan
+            // =====================================================================
+            for (const pipe of pipes) {
+                const birdHalfWidth = 16;
+                const birdHalfHeight = 12;
+                const pipeHalfWidth = 26; // Setengah dari lebar sprite pipa (misal: 52px)
+                
+                // Cek tabrakan sumbu X
+                if (player.x + birdHalfWidth > pipe.x - pipeHalfWidth && player.x - birdHalfWidth < pipe.x + pipeHalfWidth) {
+                    // Cek tabrakan sumbu Y (jika burung berada di dalam celah)
+                    if (player.y - birdHalfHeight < pipe.gapY - pipe.gapHeight / 2 || player.y + birdHalfHeight > pipe.gapY + pipe.gapHeight / 2) {
+                        player.alive = false;
+                        break; // Keluar dari loop pipa jika sudah kena
+                    }
+                }
+            }
         }
 
         let lastPipe = pipes[pipes.length - 1];
@@ -106,7 +122,8 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             pipe.x -= PIPE_SPEED * deltaFactor;
         }
         this.gameState.pipes = pipes.filter(p => p.x > -50);
-        if (lastPipe && lastPipe.x < 600) {
+        
+        if (!lastPipe || lastPipe.x < 600) {
              this.gameState.pipes.push({ x: 900, gapY: Math.floor(Math.random() * 300) + 150, gapHeight: 150 });
         }
         
@@ -157,25 +174,16 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     
     private restartGame() {
         if (!this.isHost || !this.gameState) return;
-
         const playersToReset = this.gameState.players;
-
         Object.values(playersToReset).forEach(player => {
-            player.x = 100;
-            player.y = 300;
-            player.velocityY = 0;
-            player.score = 0;
-            player.alive = true;
-            player.flap = false;
+            player.x = 100; player.y = 300; player.velocityY = 0;
+            player.score = 0; player.alive = true; player.flap = false;
         });
-
         const initialPipes = [{ x: 500, gapY: 300, gapHeight: 150 }];
-        
         update(ref(database, `rooms/${this.roomId}`), {
             players: playersToReset,
             pipes: initialPipes
         });
-        
         this.gameStartTime = Date.now();
     }
     
@@ -183,3 +191,4 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
     }
 }
+

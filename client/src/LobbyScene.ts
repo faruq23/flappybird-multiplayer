@@ -63,7 +63,7 @@ class LobbyScene extends Phaser.Scene {
 
         const backButton = this.add.text(10, 10, '< Back to Home', { fontSize: '18px', color: '#fff' }).setInteractive();
         
-        // PERBAIKAN: Panggil cleanup(true) saat kembali ke menu, untuk menghapus data pemain
+        // Panggil cleanup(true) saat kembali ke menu, untuk menghapus data pemain dari Firebase
         backButton.on('pointerdown', () => { this.cleanup(true); this.scene.start('MainMenuScene'); });
         
         this.roomText = this.add.text(this.cameras.main.width / 2, 150, '', { fontSize: '28px', color: '#ffff00', align: 'center' }).setOrigin(0.5);
@@ -72,11 +72,15 @@ class LobbyScene extends Phaser.Scene {
 
         this.startButton.on('pointerdown', () => {
             if (!this.currentRoomId) return;
-            const playersInLobby: Record<string, any> = Object.fromEntries(this.players.entries());
-            Object.values(playersInLobby).forEach(player => {
-                player.x = 100; player.y = 300; player.velocityY = 0; player.score = 0;
-                player.alive = true; player.flap = false;
+            const playersInLobby: Record<string, any> = {};
+            this.players.forEach(player => {
+                playersInLobby[player.id] = {
+                    ...player,
+                    x: 100, y: 300, velocityY: 0, score: 0,
+                    alive: true, flap: false
+                };
             });
+
             const initialPipes = [{ x: 500, gapY: 300, gapHeight: 150 }];
             update(ref(database, `rooms/${this.currentRoomId}`), { status: 'playing', players: playersInLobby, pipes: initialPipes });
         });
@@ -85,16 +89,19 @@ class LobbyScene extends Phaser.Scene {
     private listenToRoomUpdates(roomId: string) {
         const roomRef = ref(database, `rooms/${roomId}`);
         onDisconnect(ref(database, `rooms/${roomId}/players/${this.myPlayerId}`)).remove();
+        
         this.roomListener = onValue(roomRef, (snapshot) => {
             if (!snapshot.exists()) { this.cleanup(true); this.scene.start('MainMenuScene'); return; }
+            
             const roomData = snapshot.val();
             const playersData = roomData.players || {};
             this.players.clear();
             Object.values(playersData).forEach((p: any) => this.players.set(p.id, p));
             this.updatePlayerListText();
+            
             const isHost = roomData.hostId === this.myPlayerId;
             if (roomData.status === 'playing') {
-                // PERBAIKAN: Panggil cleanup(false) saat mulai game, agar data pemain TIDAK dihapus
+                // Panggil cleanup(false) saat mulai game, agar data pemain TIDAK dihapus
                 this.cleanup(false);
                 this.scene.start('MultiplayerPlayScene', { roomId: this.currentRoomId, playerId: this.myPlayerId, isHost: isHost });
             }
@@ -112,13 +119,12 @@ class LobbyScene extends Phaser.Scene {
         this.playerListText.setText('Players in room:\n' + playerNames.join('\n'));
     }
 
-    // =====================================================================
-    // PERBAIKAN FINAL DI SINI
-    // =====================================================================
+    // PERBAIKAN: Fungsi cleanup sekarang menerima parameter
     cleanup(deletePlayerData: boolean) {
         if (this.roomInput?.parentNode) { this.roomInput.parentNode.removeChild(this.roomInput); }
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
-        // Hanya hapus data pemain jika diminta (misal: saat kembali ke menu utama)
+        
+        // Hanya hapus data pemain dari Firebase jika diminta (misalnya: saat kembali ke menu)
         if (deletePlayerData && this.currentRoomId && this.myPlayerId) {
              set(ref(database, `rooms/${this.currentRoomId}/players/${this.myPlayerId}`), null);
         }
