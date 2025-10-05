@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
 
+type Pipe = { 
+    x: number; 
+    gapY: number; 
+    isTop: boolean; 
+    sprite: Phaser.GameObjects.Image 
+};
+
 export default class SinglePlayerScene extends Phaser.Scene {
     private bird!: Phaser.Physics.Arcade.Sprite;
     private pipes!: Phaser.GameObjects.Group;
@@ -7,6 +14,7 @@ export default class SinglePlayerScene extends Phaser.Scene {
     private score: number = 0;
     private scoreText!: Phaser.GameObjects.Text;
     private gameOverText!: Phaser.GameObjects.Text;
+    private background!: Phaser.GameObjects.TileSprite;
 
     // Game constants
     private readonly GRAVITY = 600;
@@ -22,7 +30,7 @@ export default class SinglePlayerScene extends Phaser.Scene {
     }
 
     preload() {
-        // Path ini sudah benar karena file gambar ada di dalam folder 'public'
+        this.load.image("background", "Bg.png");
         this.load.spritesheet("bird", "/Bird.png", { frameWidth: 32, frameHeight: 24 });
         this.load.image("pipe", "/Pipe.png");
         this.load.image("pipeTop", "/InvertPipe.png");
@@ -31,6 +39,10 @@ export default class SinglePlayerScene extends Phaser.Scene {
     create() {
         this.isGameOver = false;
         this.score = 0;
+        // Create BackGround
+        const { width, height } = this.scale;
+        this.background = this.add.tileSprite(0, 0, width, height, "background");
+        this.background.setOrigin(0, 0);
 
         // Create Bird
         this.bird = this.physics.add.sprite(150, 300, 'bird').setOrigin(0.5);
@@ -39,15 +51,7 @@ export default class SinglePlayerScene extends Phaser.Scene {
         this.bird.anims.play('fly');
 
         // Create Pipes Group
-        this.pipes = this.physics.add.group({ immovable: true });
-
-        // Pipe Spawner
-        this.pipeSpawnTimer = this.time.addEvent({
-            delay: this.PIPE_SPAWN_INTERVAL,
-            callback: this.spawnPipePair, 
-            callbackScope: this,
-            loop: true
-        });
+        this.pipes = this.physics.add.group();
 
         // Input Handling
         this.input.on('pointerdown', this.flap, this);
@@ -57,13 +61,24 @@ export default class SinglePlayerScene extends Phaser.Scene {
         this.physics.add.collider(this.bird, this.pipes, this.endGame, undefined, this);
 
         // Score Text
-        this.scoreText = this.add.text(10, 10, 'Score: 0', { fontSize: '24px', color: '#fff', stroke: '#000', strokeThickness: 4 });
+        this.scoreText = this.add.text(10, 10, 'Score: 0', { fontSize: '24px', color: '#000' });
         
-        // Game Over Text (dibuat di awal tapi tidak terlihat)
-        this.gameOverText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 - 50, 'Game Over', { fontSize: '48px', color: '#ff0000', stroke: '#000', strokeThickness: 6 }).setOrigin(0.5).setVisible(false);
+        // Home Button
+        const homeButton = this.add.text(this.cameras.main.width - 10, 10, 'Back to Home', { fontSize: '18px', color: '#000' }).setOrigin(1, 0).setInteractive();
+        homeButton.on('pointerdown', () => {
+            window.location.href = '/';
+        });
+
+        this.gameOverText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 - 50, 'Game Over', { fontSize: '48px', color: '#ff0000' }).setOrigin(0.5).setVisible(false);
+
+        this.physics.pause();
+        this.bird.setGravityY(0);
+
+        this.time.delayedCall(3000, this.startGame, [], this);
     }
 
     update(time: number, delta: number) {
+        this.background.tilePositionX += 1;
         if (this.isGameOver) return;
 
         // Check for out of bounds
@@ -75,23 +90,22 @@ export default class SinglePlayerScene extends Phaser.Scene {
         Phaser.Actions.IncX(this.pipes.getChildren(), -this.PIPE_SPEED * (delta / 1000));
         
         this.pipes.getChildren().forEach(pipe => {
-            const pipeSprite = pipe as Phaser.Physics.Arcade.Sprite;
-            
-            // Cek untuk scoring
+            const pipeSprite = pipe as Phaser.GameObjects.Sprite;
             if (pipeSprite.x < this.bird.x && !pipeSprite.getData('scored')) {
+                // Check if it's the bottom pipe to score only once per pair
                 if (pipeSprite.getData('isBottomPipe')) {
                     this.score++;
                     this.scoreText.setText(`Score: ${this.score}`);
                 }
                 pipeSprite.setData('scored', true);
+                // To prevent scoring again on the top pipe
                 const pair = pipeSprite.getData('pair');
                 if (pair) {
-                    pair.setData('scored', true);
+                  pair.setData('scored', true);
                 }
             }
 
-            // Hapus pipa yang sudah keluar layar
-            if (pipeSprite.x < -pipeSprite.width) {
+            if (pipeSprite.x < -50) {
                 pipe.destroy();
             }
         });
@@ -103,17 +117,17 @@ export default class SinglePlayerScene extends Phaser.Scene {
     }
 
     spawnPipePair() {
-        const halfGap = this.PIPE_GAP_HEIGHT / 2;
-        const gameHeight = this.cameras.main.height;
-        const gapY = Phaser.Math.Between(halfGap + 20, gameHeight - halfGap - 20);
+        const gapY = Phaser.Math.Between(120, 480);
+        const gapTop = gapY - this.PIPE_GAP_HEIGHT / 2;
+        const gapBottom = gapY + this.PIPE_GAP_HEIGHT / 2;
 
-        const topPipe = this.pipes.create(this.cameras.main.width, gapY - halfGap, 'pipeTop').setOrigin(0.5, 1) as Phaser.Physics.Arcade.Sprite;
-        const bottomPipe = this.pipes.create(this.cameras.main.width, gapY + halfGap, 'pipe').setOrigin(0.5, 0) as Phaser.Physics.Arcade.Sprite;
+        const topPipe = this.pipes.create(this.cameras.main.width, gapTop, 'pipeTop').setOrigin(0.5, 1) as Phaser.Physics.Arcade.Sprite;
+        (topPipe.body as Phaser.Physics.Arcade.Body).allowGravity = false;
         
-        [topPipe, bottomPipe].forEach(p => {
-            (p.body as Phaser.Physics.Arcade.Body).allowGravity = false;
-        });
+        const bottomPipe = this.pipes.create(this.cameras.main.width, gapBottom, 'pipe').setOrigin(0.5, 0) as Phaser.Physics.Arcade.Sprite;
+        (bottomPipe.body as Phaser.Physics.Arcade.Body).allowGravity = false;
 
+        // Mark for scoring
         bottomPipe.setData('isBottomPipe', true);
         topPipe.setData('pair', bottomPipe);
         bottomPipe.setData('pair', topPipe);
@@ -121,21 +135,32 @@ export default class SinglePlayerScene extends Phaser.Scene {
 
     endGame() {
         if (this.isGameOver) return;
-
         this.isGameOver = true;
         this.physics.pause();
         this.bird.anims.stop();
         this.pipeSpawnTimer.remove();
         this.gameOverText.setVisible(true);
 
-        this.time.delayedCall(500, () => {
-            const restartButton = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 50, 'Restart', { fontSize: '32px', color: '#fff', backgroundColor: '#333', padding: {x: 10, y: 5} })
-                .setOrigin(0.5)
-                .setInteractive();
-            
-            restartButton.on('pointerdown', () => {
-                this.scene.restart();
-            });
+        // Add Restart Button
+        const restartButton = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 50, 'Restart', { fontSize: '32px', color: '#fff', backgroundColor: '#333', padding: {x: 10, y: 5} })
+            .setOrigin(0.5)
+            .setInteractive();
+        
+        restartButton.on('pointerdown', () => {
+            this.scene.restart();
+        });
+    }
+
+    startGame() {
+        this.physics.resume();
+        this.bird.setGravityY(this.GRAVITY);
+
+        // Pipe Spawner
+        this.pipeSpawnTimer = this.time.addEvent({
+            delay: this.PIPE_SPAWN_INTERVAL,
+            callback: this.spawnPipePair, 
+            callbackScope: this,
+            loop: true
         });
     }
 }

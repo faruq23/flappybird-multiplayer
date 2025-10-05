@@ -27,10 +27,11 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
     constructor() { super({ key: "MultiplayerPlayScene" }); }
 
-    init(data: { roomId: string, playerId: string, isHost: boolean }) {
-        this.roomId = data.roomId;
-        this.meId = data.playerId;
-        this.isHost = data.isHost;
+    init() {
+        const params = new URLSearchParams(window.location.search);
+        this.roomId = params.get('roomId') || '';
+        this.meId = params.get('playerId') || '';
+        this.isHost = params.get('isHost') === 'true';
         this.birds.clear();
         this.pipeSprites.clear();
     }
@@ -85,7 +86,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.backToMenuButton = this.add.text(400, 350, "Back to Menu", { fontSize: "24px", color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
         this.restartButton = this.add.text(400, 300, "Restart Game", { fontSize: "24px", color: '#fff', backgroundColor: '#28a745', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
         
-        this.backToMenuButton.on('pointerdown', () => { this.cleanup(); this.scene.start('LobbyScene'); });
+        this.backToMenuButton.on('pointerdown', () => { this.cleanup(); window.location.href = '/lobby'; });
         if (this.isHost) { this.restartButton.on('pointerdown', () => this.restartGame()); }
     }
 

@@ -62,7 +62,7 @@ class LobbyScene extends Phaser.Scene {
         });
 
         const backButton = this.add.text(10, 10, '< Back to Home', { fontSize: '18px', color: '#fff' }).setInteractive();
-        backButton.on('pointerdown', () => { this.cleanup(true); this.scene.start('MainMenuScene'); });
+        backButton.on('pointerdown', () => { this.cleanup(true); window.location.href = '/'; });
         
         this.roomText = this.add.text(this.cameras.main.width / 2, 150, '', { fontSize: '28px', color: '#ffff00', align: 'center' }).setOrigin(0.5);
         this.playerListText = this.add.text(this.cameras.main.width / 2, 300, '', { fontSize: '20px', color: '#fff', align: 'center' }).setOrigin(0.5);
@@ -98,7 +98,7 @@ class LobbyScene extends Phaser.Scene {
         onDisconnect(ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`)).remove();
         
         this.roomListener = onValue(roomRef, (snapshot) => {
-            if (!snapshot.exists()) { this.cleanup(true); this.scene.start('MainMenuScene'); return; }
+            if (!snapshot.exists()) { this.cleanup(true); window.location.href = '/'; return; }
             
             const roomData = snapshot.val();
             const playersData = roomData.lobbyPlayers || {};
@@ -111,7 +111,7 @@ class LobbyScene extends Phaser.Scene {
             // Hanya pindah scene jika status 'playing' DAN gameState sudah ada
             if (roomData.status === 'playing' && roomData.gameState) {
                 this.cleanup(false);
-                this.scene.start('MultiplayerPlayScene', { roomId: this.currentRoomId, playerId: this.myPlayerId, isHost: isHost });
+                window.location.href = `/multiplayer?roomId=${this.currentRoomId}&playerId=${this.myPlayerId}&isHost=${isHost}`;
             }
         });
     }

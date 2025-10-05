@@ -1,10 +1,19 @@
 // src/main.ts
-
 import Phaser from "phaser";
 import MainMenuScene from "./MainMenuScene";
 import LobbyScene from "./LobbyScene";
 import MultiplayerPlayScene from "./MultiplayerPlayScene";
 import SinglePlayerScene from "./SinglePlayerScene";
+
+const routes: Record<string, typeof Phaser.Scene> = {
+    '/': MainMenuScene,
+    '/lobby': LobbyScene,
+    '/multiplayer': MultiplayerPlayScene,
+    '/singleplayer': SinglePlayerScene,
+};
+
+const path = window.location.pathname;
+const scene = routes[path] || MainMenuScene;
 
 const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
@@ -22,8 +31,8 @@ const config: Phaser.Types.Core.GameConfig = {
         }
     },
     
-    // Memuat semua scene yang ada
-    scene: [MainMenuScene, LobbyScene, MultiplayerPlayScene, SinglePlayerScene]
+    // Memuat scene yang sesuai dengan route
+    scene: [scene]
 };
 
 // Membuat instance game baru
@@ -35,4 +44,3 @@ if (import.meta.hot) {
         game.destroy(true);
     });
 }
-

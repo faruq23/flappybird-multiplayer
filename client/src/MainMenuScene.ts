@@ -16,17 +16,15 @@ class MainMenuScene extends Phaser.Scene {
             .setInteractive();
 
         singlePlayerButton.on('pointerdown', () => {
-            // Ganti dengan scene single player Anda jika ada
-            this.scene.start('SinglePlayerScene'); 
+            window.location.href = '/singleplayer';
         });
 
         const multiplayerButton = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 60, 'Multiplayer', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } })
             .setOrigin(0.5)
             .setInteractive();
 
-        // PERBAIKAN: Gunakan this.scene.start() untuk pindah scene, bukan refresh halaman
         multiplayerButton.on('pointerdown', () => {
-            this.scene.start('LobbyScene');
+            window.location.href = '/lobby';
         });
     }
 }
