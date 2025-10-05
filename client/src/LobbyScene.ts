@@ -31,8 +31,8 @@ class LobbyScene extends Phaser.Scene {
 
         this.roomInput = document.createElement('input');
         this.roomInput.type = 'text'; this.roomInput.placeholder = 'Enter Room ID';
-        this.roomInput.style.position = 'absolute'; this.roomInput.style.top = '200px';
-        this.roomInput.style.left = `${this.cameras.main.width / 2 + 290}px`;
+        this.roomInput.style.position = 'absolute'; this.roomInput.style.top = '300px';
+        this.roomInput.style.left = `${this.cameras.main.width / 2 + 250}px`;
         this.roomInput.style.width = '200px'; this.roomInput.style.padding = '10px'; this.roomInput.style.fontSize = '16px';
         document.body.appendChild(this.roomInput);
 
