@@ -21,6 +21,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 800,
     height: 600,
     backgroundColor: "#87CEEB",
+    dom: { createContainer: true },
 
     // PERBAIKAN FINAL: Mengaktifkan fisika dengan konfigurasi standar
     physics: {
