@@ -21,6 +21,10 @@ const config: Phaser.Types.Core.GameConfig = {
     width: 800,
     height: 600,
     backgroundColor: "#87CEEB",
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
 
     // PERBAIKAN FINAL: Mengaktifkan fisika dengan konfigurasi standar
     physics: {

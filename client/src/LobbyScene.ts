@@ -39,11 +39,8 @@ class LobbyScene extends Phaser.Scene {
         this.roomInput.id = 'room-id-input';
         document.body.appendChild(this.roomInput);
 
-        // Calculate position based on canvas
-        const canvas = this.sys.game.canvas;
-        const canvasBounds = canvas.getBoundingClientRect();
-        this.roomInput.style.left = `${canvasBounds.left + (this.cameras.main.width / 2) - 110}px`;
-        this.roomInput.style.top = `${canvasBounds.top + 240}px`;
+        this.repositionInput();
+        this.scale.on('resize', this.repositionInput, this);
 
         this.createRoomButton = this.add.text(this.cameras.main.width / 2, 180, 'Create Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive();
         
@@ -151,6 +148,13 @@ class LobbyScene extends Phaser.Scene {
         if (isHost) { this.startButton.setVisible(true); }
     }
 
+    repositionInput() {
+        const canvas = this.sys.game.canvas;
+        const canvasBounds = canvas.getBoundingClientRect();
+        this.roomInput.style.left = `${canvasBounds.left + (canvasBounds.width / 2) - (this.roomInput.offsetWidth / 2)}px`;
+        this.roomInput.style.top = `${canvasBounds.top + (canvasBounds.height * 0.4)}px`;
+    }
+
     updatePlayerListText() {
         const playerNames = Array.from(this.players.values()).map(p => p.name || `Player ${p.id.substring(0,3)}`);
         this.playerListText.setText('Players in room:\n' + playerNames.join('\n'));
@@ -159,6 +163,7 @@ class LobbyScene extends Phaser.Scene {
     cleanup(deletePlayerData: boolean) {
         if (this.roomInput?.parentNode) { this.roomInput.parentNode.removeChild(this.roomInput); }
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
+        this.scale.off('resize', this.repositionInput, this);
         
         if (deletePlayerData && this.currentRoomId && this.myPlayerId) {
              set(ref(database, `rooms/${this.currentRoomId}/lobbyPlayers/${this.myPlayerId}`), null);
