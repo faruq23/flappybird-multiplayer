@@ -6,7 +6,7 @@ import { ref, set, onValue, get, update, Unsubscribe, onDisconnect } from "fireb
 import { Player } from '@shared/types';
 
 class LobbyScene extends Phaser.Scene {
-    private roomInput!: Phaser.GameObjects.DOMElement;
+    private roomInput!: HTMLInputElement;
     private roomText!: Phaser.GameObjects.Text;
     private startButton!: Phaser.GameObjects.Text;
     private createRoomButton!: Phaser.GameObjects.Text;
@@ -29,13 +29,23 @@ class LobbyScene extends Phaser.Scene {
         this.myPlayerId = `player_${Math.random().toString(36).substring(2, 9)}`;
         this.add.text(this.cameras.main.width / 2, 50, 'Multiplayer Lobby', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
 
+        this.roomInput = document.createElement('input');
+        this.roomInput.type = 'text';
+        this.roomInput.placeholder = 'Enter Room ID';
+        this.roomInput.style.position = 'absolute';
+        this.roomInput.style.width = '200px';
+        this.roomInput.style.padding = '10px';
+        this.roomInput.style.fontSize = '16px';
+        this.roomInput.id = 'room-id-input';
+        document.body.appendChild(this.roomInput);
+
+        // Calculate position based on canvas
+        const canvas = this.sys.game.canvas;
+        const canvasBounds = canvas.getBoundingClientRect();
+        this.roomInput.style.left = `${canvasBounds.left + (this.cameras.main.width / 2) - 110}px`;
+        this.roomInput.style.top = `${canvasBounds.top + 240}px`;
+
         this.createRoomButton = this.add.text(this.cameras.main.width / 2, 180, 'Create Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive();
-
-        this.roomInput = this.add.dom(this.cameras.main.width / 2, 250).createFromHTML(
-            `<input id="room-id-input" type="text" placeholder="Enter Room ID" style="width: 200px; padding: 10px; font-size: 16px; border: none; border-radius: 5px;">`
-        ).setOrigin(0.5);
-
-        this.joinRoomButton = this.add.text(this.cameras.main.width / 2, 310, 'Join Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive();
         
         this.createRoomButton.on('pointerdown', () => {
             const newRoomId = this.generateShortId();
@@ -49,10 +59,10 @@ class LobbyScene extends Phaser.Scene {
             });
         });
 
+        this.joinRoomButton = this.add.text(this.cameras.main.width / 2, 310, 'Join Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive();
+        
         this.joinRoomButton.on('pointerdown', async () => {
-            const inputElement = document.getElementById('room-id-input') as HTMLInputElement;
-            if (!inputElement) return;
-            const roomId = inputElement.value.trim().toUpperCase();
+            const roomId = this.roomInput.value.trim().toUpperCase();
             if (!roomId) return;
             const roomRef = ref(database, `rooms/${roomId}`);
             const snapshot = await get(roomRef);
@@ -123,7 +133,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     showRoomUI(roomId: string, isHost: boolean = true) {
-        this.roomInput.setVisible(false);
+        if(this.roomInput) this.roomInput.style.display = 'none';
         this.createRoomButton.setVisible(false);
         this.joinRoomButton.setVisible(false);
         this.roomText.setText(`Room ID: ${roomId}`);
@@ -147,6 +157,7 @@ class LobbyScene extends Phaser.Scene {
     }
 
     cleanup(deletePlayerData: boolean) {
+        if (this.roomInput?.parentNode) { this.roomInput.parentNode.removeChild(this.roomInput); }
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
         
         if (deletePlayerData && this.currentRoomId && this.myPlayerId) {
