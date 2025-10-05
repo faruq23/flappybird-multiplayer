@@ -11,11 +11,13 @@ class LobbyScene extends Phaser.Scene {
     private startButton!: Phaser.GameObjects.Text;
     private createRoomButton!: Phaser.GameObjects.Text;
     private joinRoomButton!: Phaser.GameObjects.Text;
+    private copyButton!: Phaser.GameObjects.Text;
     private playerListText!: Phaser.GameObjects.Text;
     private currentRoomId: string = '';
     private myPlayerId: string = '';
     private players: Map<string, Player> = new Map();
     private roomListener: Unsubscribe | null = null;
+    private playerColors = [0xff0000, 0x0000ff, 0x00ff00, 0xffff00];
 
     private generateShortId(length: number = 5): string {
         return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
@@ -29,17 +31,17 @@ class LobbyScene extends Phaser.Scene {
 
         this.roomInput = document.createElement('input');
         this.roomInput.type = 'text'; this.roomInput.placeholder = 'Enter Room ID';
-        this.roomInput.style.position = 'absolute'; this.roomInput.style.top = '100px';
-        this.roomInput.style.left = `${this.cameras.main.width / 2 - 100}px`;
+        this.roomInput.style.position = 'absolute'; this.roomInput.style.top = '200px';
+        this.roomInput.style.left = `${this.cameras.main.width / 2 + 290}px`;
         this.roomInput.style.width = '200px'; this.roomInput.style.padding = '10px'; this.roomInput.style.fontSize = '16px';
         document.body.appendChild(this.roomInput);
 
-        this.createRoomButton = this.add.text(this.cameras.main.width / 2, 180, 'Create Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive();
+        this.createRoomButton = this.add.text(this.cameras.main.width / 2, 220, 'Create Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive();
         
         this.createRoomButton.on('pointerdown', () => {
             const newRoomId = this.generateShortId();
             const newRoomRef = ref(database, `rooms/${newRoomId}`);
-            const newPlayerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}` };
+            const newPlayerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}`, color: this.playerColors[0], playerNumber: 1 };
             set(newRoomRef, {
                 roomId: newRoomId, hostId: this.myPlayerId, status: 'lobby',
                 lobbyPlayers: { [this.myPlayerId]: newPlayerLobbyData }
@@ -48,14 +50,18 @@ class LobbyScene extends Phaser.Scene {
             });
         });
 
-        this.joinRoomButton = this.add.text(this.cameras.main.width / 2, 240, 'Join Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive();
+        this.joinRoomButton = this.add.text(this.cameras.main.width / 2, 280, 'Join Room', { fontSize: '24px', color: '#fff', backgroundColor: '#333', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive();
         
         this.joinRoomButton.on('pointerdown', async () => {
             const roomId = this.roomInput.value.trim().toUpperCase();
             if (!roomId) return;
             const roomRef = ref(database, `rooms/${roomId}`);
-            if ((await get(roomRef)).exists()) {
-                const playerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}` };
+            const snapshot = await get(roomRef);
+            if (snapshot.exists()) {
+                const roomData = snapshot.val();
+                const numPlayers = Object.keys(roomData.lobbyPlayers || {}).length;
+                const playerColor = this.playerColors[numPlayers % this.playerColors.length];
+                const playerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}`, color: playerColor, playerNumber: numPlayers + 1 };
                 await set(ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`), playerLobbyData);
                 this.currentRoomId = roomId; this.listenToRoomUpdates(roomId); this.showRoomUI(roomId, false);
             }
@@ -65,6 +71,7 @@ class LobbyScene extends Phaser.Scene {
         backButton.on('pointerdown', () => { this.cleanup(true); window.location.href = '/'; });
         
         this.roomText = this.add.text(this.cameras.main.width / 2, 150, '', { fontSize: '28px', color: '#ffff00', align: 'center' }).setOrigin(0.5);
+        this.copyButton = this.add.text(this.cameras.main.width / 2 + 150, 150, 'Copy', { fontSize: '20px', color: '#000', backgroundColor: '#fff', padding: { x: 8, y: 4 } }).setOrigin(0.5).setInteractive().setVisible(false);
         this.playerListText = this.add.text(this.cameras.main.width / 2, 300, '', { fontSize: '20px', color: '#fff', align: 'center' }).setOrigin(0.5);
         this.startButton = this.add.text(this.cameras.main.width / 2, 450, 'Start Game', { fontSize: '24px', color: '#fff', backgroundColor: '#28a745', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
 
@@ -121,6 +128,17 @@ class LobbyScene extends Phaser.Scene {
         this.createRoomButton.setVisible(false);
         this.joinRoomButton.setVisible(false);
         this.roomText.setText(`Room ID: ${roomId}`);
+
+        this.copyButton.setVisible(true);
+        this.copyButton.on('pointerdown', () => {
+            navigator.clipboard.writeText(roomId).then(() => {
+                this.copyButton.setText('Copied!');
+                this.time.delayedCall(2000, () => {
+                    this.copyButton.setText('Copy');
+                });
+            });
+        });
+
         if (isHost) { this.startButton.setVisible(true); }
     }
 

@@ -14,11 +14,16 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     private inputsListener: Unsubscribe | null = null;
 
     private birds: Map<string, Phaser.GameObjects.Sprite> = new Map();
+    private playerLabels: Map<string, Phaser.GameObjects.Text> = new Map();
     private pipeSprites: Map<string, { top: Phaser.GameObjects.Image, bottom: Phaser.GameObjects.Image }> = new Map();
     
     private backToMenuButton!: Phaser.GameObjects.Text;
     private gameOverText!: Phaser.GameObjects.Text;
     private restartButton!: Phaser.GameObjects.Text;
+
+    private gameState: GameState | null = null;
+    private gameStarted: boolean = false;
+    private gameStartTime: number = 0;
 
     // --- Konstanta fisika disamakan untuk Host ---
     private readonly GRAVITY = 0.3;
@@ -33,6 +38,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.meId = params.get('playerId') || '';
         this.isHost = params.get('isHost') === 'true';
         this.birds.clear();
+        this.playerLabels.clear();
         this.pipeSprites.clear();
     }
 
@@ -51,6 +57,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.roomListener = onValue(gameStateRef, (snapshot) => {
             const serverState = snapshot.val();
             if (serverState) {
+                this.gameState = serverState;
                 this.syncFromServer(serverState);
             }
         });
@@ -87,7 +94,15 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.restartButton = this.add.text(400, 300, "Restart Game", { fontSize: "24px", color: '#fff', backgroundColor: '#28a745', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
         
         this.backToMenuButton.on('pointerdown', () => { this.cleanup(); window.location.href = '/lobby'; });
-        if (this.isHost) { this.restartButton.on('pointerdown', () => this.restartGame()); }
+        if (this.isHost) {
+            this.restartButton.on('pointerdown', () => this.restartGame());
+            this.gameStartTime = this.time.now;
+            this.time.delayedCall(5000, this.startGame, [], this);
+        }
+    }
+
+    startGame() {
+        this.gameStarted = true;
     }
 
     handleInput() {
@@ -98,22 +113,36 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     
     update(time: number, delta: number) {
         // HANYA HOST yang menjalankan simulasi game
-        if (!this.isHost) return;
+        if (!this.isHost || !this.gameState) return;
 
         const gameStateRef = ref(database, `rooms/${this.roomId}/gameState`);
-        get(gameStateRef).then((snapshot) => {
-            const gameState = snapshot.val();
-            if (!gameState) return;
+        const gameState = this.gameState;
+        const players = gameState.players;
+        const pipes = gameState.pipes || [];
+        const deltaFactor = delta / 16.66;
 
-            const allPlayers = Object.values(gameState.players);
-            const allPlayersDead = allPlayers.length > 0 && allPlayers.every((p: any) => !p.alive);
+        // Selalu gerakkan pipa
+        for (const pipe of pipes) { pipe.x -= this.PIPE_SPEED * deltaFactor; }
+        gameState.pipes = pipes.filter((p: any) => p.x > -50);
 
-            if (allPlayersDead) return; // Hentikan simulasi jika semua mati
+        // Spawn pipa baru setelah 4 detik
+        if (this.time.now > this.gameStartTime + 4000) {
+            let lastPipe = gameState.pipes[gameState.pipes.length - 1];
+            if (!lastPipe || lastPipe.x < 600) {
+                gameState.pipes.push({ 
+                    id: `pipe_${Date.now()}_${Math.random()}`,
+                    x: 900, gapY: Math.floor(Math.random() * 300) + 150, gapHeight: 150 
+                });
+            }
+        }
 
-            const deltaFactor = delta / 16.66;
-            const players = gameState.players;
-            const pipes = gameState.pipes || [];
+        const allPlayers = Object.values(players);
+        const allPlayersDead = allPlayers.length > 0 && allPlayers.every((p: any) => !p.alive);
 
+        if (allPlayersDead) return; // Hentikan simulasi jika semua mati
+
+        // Hanya jalankan fisika burung jika game sudah dimulai
+        if (this.gameStarted) {
             for (const playerId in players) {
                 const player = players[playerId];
                 if (!player.alive) continue;
@@ -137,19 +166,9 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                     }
                 }
             }
+        }
 
-            for (const pipe of pipes) { pipe.x -= this.PIPE_SPEED * deltaFactor; }
-            
-            let lastPipe = pipes[pipes.length - 1];
-            gameState.pipes = pipes.filter((p: any) => p.x > -50);
-            if (!lastPipe || lastPipe.x < 600) {
-                 gameState.pipes.push({ 
-                    id: `pipe_${Date.now()}_${Math.random()}`,
-                    x: 900, gapY: Math.floor(Math.random() * 300) + 150, gapHeight: 150 
-                });
-            }
-            set(gameStateRef, gameState);
-        });
+        set(gameStateRef, gameState);
     }
 
     syncFromServer(serverState: GameState) {
@@ -181,23 +200,41 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             if(!incomingPlayerIds.has(playerId)) {
                 bird.destroy();
                 this.birds.delete(playerId);
+                const label = this.playerLabels.get(playerId);
+                if (label) {
+                    label.destroy();
+                    this.playerLabels.delete(playerId);
+                }
             }
         });
 
         Object.values(serverState.players).forEach(serverPlayer => {
             let bird = this.birds.get(serverPlayer.id);
+            let label = this.playerLabels.get(serverPlayer.id);
+
             if (!bird) {
                 bird = this.add.sprite(serverPlayer.x, serverPlayer.y, "bird").setOrigin(0.5);
+                if (serverPlayer.color) {
+                    bird.setTint(serverPlayer.color);
+                }
                 this.birds.set(serverPlayer.id, bird);
+
+                label = this.add.text(serverPlayer.x, serverPlayer.y - 20, `P${serverPlayer.playerNumber}`, { fontSize: '16px', color: '#ffffff' }).setOrigin(0.5);
+                this.playerLabels.set(serverPlayer.id, label);
             }
             
             bird.setPosition(serverPlayer.x, serverPlayer.y);
+            if (label) {
+                label.setPosition(serverPlayer.x, serverPlayer.y - 20);
+            }
 
             if (serverPlayer.alive) {
-                bird.clearTint();
+                bird.alpha = 1;
+                if (label) label.alpha = 1;
                 if (!bird.anims.isPlaying) bird.anims.play("fly", true);
             } else {
-                bird.setTint(0x888888);
+                bird.alpha = 0.5;
+                if (label) label.alpha = 0.5;
                 bird.anims.stop();
             }
         });
@@ -210,27 +247,33 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
     
     private restartGame() {
-        if (!this.isHost) return;
-        get(ref(database, `rooms/${this.roomId}/lobbyPlayers`)).then((snapshot) => {
-            if (snapshot.exists()) {
-                const lobbyPlayers = snapshot.val();
-                const playersToReset: Record<string, Player> = {};
-                for (const playerId in lobbyPlayers) {
-                    playersToReset[playerId] = { ...lobbyPlayers[playerId], x: 100, y: 300, velocityY: 0, score: 0, alive: true, flap: false };
-                }
-                const newGameState: GameState = { 
-                    players: playersToReset, 
-                    pipes: [{ id: `pipe_${Date.now()}`, x: 500, gapY: 300, gapHeight: 150 }]
-                };
-                set(ref(database, `rooms/${this.roomId}/inputs`), null);
-                set(ref(database, `rooms/${this.roomId}/gameState`), newGameState);
-            }
-        });
+        if (!this.isHost || !this.gameState) return;
+
+        this.gameStarted = false;
+        this.gameStartTime = this.time.now;
+        this.time.delayedCall(5000, this.startGame, [], this);
+
+        const playersToReset: Record<string, Player> = {};
+        for (const playerId in this.gameState.players) {
+            const player = this.gameState.players[playerId];
+            playersToReset[playerId] = { ...player, x: 100, y: 300, velocityY: 0, score: 0, alive: true, flap: false };
+        }
+
+        const newGameState: GameState = {
+            ...this.gameState,
+            players: playersToReset,
+            pipes: []
+        };
+
+        set(ref(database, `rooms/${this.roomId}/inputs`), null);
+        set(ref(database, `rooms/${this.roomId}/gameState`), newGameState);
     }
     
     cleanup() {
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
         if (this.inputsListener) { this.inputsListener(); this.inputsListener = null; }
+        this.playerLabels.forEach(label => label.destroy());
+        this.playerLabels.clear();
     }
 }
 

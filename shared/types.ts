@@ -8,6 +8,8 @@ export interface Player {
   velocityY: number;
   score: number;
   alive: boolean;
+  color: number;
+  playerNumber: number;
   
   // Hapus timestamp, ganti dengan ini:
   flap: boolean; 
