@@ -1,4 +1,4 @@
-// src/LobbyScene.ts2
+// src/LobbyScene.ts
 
 import Phaser from 'phaser';
 import { database } from './firebase';
@@ -18,6 +18,7 @@ class LobbyScene extends Phaser.Scene {
     private players: Map<string, Player> = new Map();
     private roomListener: Unsubscribe | null = null;
     private onDisconnectRef: OnDisconnect | null = null;
+    private isNavigating: boolean = false; // Flag untuk mencegah eksekusi ganda
 
     private generateShortId(length: number = 5): string {
         return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
@@ -125,6 +126,9 @@ class LobbyScene extends Phaser.Scene {
         this.onDisconnectRef.remove();
         
         this.roomListener = onValue(roomRef, (snapshot) => {
+            // Jika kita sudah dalam proses navigasi, abaikan update terakhir
+            if (this.isNavigating) return;
+
             if (!snapshot.exists()) { this.cleanup(true); window.location.href = '/'; return; }
             
             const roomData = snapshot.val();
@@ -135,9 +139,20 @@ class LobbyScene extends Phaser.Scene {
             
             const isHost = roomData.hostId === this.myPlayerId;
 
+            // =====================================================================
+            // PERBAIKAN KUNCI: Batalkan onDisconnect, beri jeda, baru navigasi
+            // =====================================================================
             if (roomData.status === 'playing' && roomData.gameState) {
+                // Set flag agar listener tidak terpicu lagi saat transisi
+                this.isNavigating = true;
+                
+                // Matikan semua listener & batalkan onDisconnect
                 this.cleanup(false);
-                window.location.href = `/game?roomId=${this.currentRoomId}&playerId=${this.myPlayerId}&isHost=${isHost}`;
+                
+                // Beri jeda 100ms sebelum navigasi untuk memberi waktu Firebase memproses `cancel()`
+                setTimeout(() => {
+                    window.location.href = `/game?roomId=${this.currentRoomId}&playerId=${this.myPlayerId}&isHost=${isHost}`;
+                }, 100);
             }
         });
     }
@@ -201,3 +216,4 @@ class LobbyScene extends Phaser.Scene {
     }
 }
 export default LobbyScene;
+
