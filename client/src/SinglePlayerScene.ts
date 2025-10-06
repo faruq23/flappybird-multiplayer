@@ -11,8 +11,6 @@ export default class SinglePlayerScene extends Phaser.Scene {
     private bird!: Phaser.Physics.Arcade.Sprite;
     private pipes!: Phaser.GameObjects.Group;
     private isGameOver: boolean = false;
-    private score: number = 0;
-    private scoreText!: Phaser.GameObjects.Text;
     private gameOverText!: Phaser.GameObjects.Text;
     private background!: Phaser.GameObjects.TileSprite;
 
@@ -38,7 +36,6 @@ export default class SinglePlayerScene extends Phaser.Scene {
 
     create() {
         this.isGameOver = false;
-        this.score = 0;
         // Create BackGround
         const { width, height } = this.scale;
         this.background = this.add.tileSprite(0, 0, width, height, "background");
@@ -60,9 +57,6 @@ export default class SinglePlayerScene extends Phaser.Scene {
         // Collision Detection
         this.physics.add.collider(this.bird, this.pipes, this.endGame, undefined, this);
 
-        // Score Text
-        this.scoreText = this.add.text(10, 10, 'Score: 0', { fontSize: '24px', color: '#000' });
-        
         // Home Button
         const homeButton = this.add.text(this.cameras.main.width - 10, 10, 'Back to Home', { fontSize: '18px', color: '#000' }).setOrigin(1, 0).setInteractive();
         homeButton.on('pointerdown', () => {
@@ -86,25 +80,11 @@ export default class SinglePlayerScene extends Phaser.Scene {
             this.endGame();
         }
 
-        // Pipe movement and scoring
+        // Pipe movement
         Phaser.Actions.IncX(this.pipes.getChildren(), -this.PIPE_SPEED * (delta / 1000));
         
         this.pipes.getChildren().forEach(pipe => {
             const pipeSprite = pipe as Phaser.GameObjects.Sprite;
-            if (pipeSprite.x < this.bird.x && !pipeSprite.getData('scored')) {
-                // Check if it's the bottom pipe to score only once per pair
-                if (pipeSprite.getData('isBottomPipe')) {
-                    this.score++;
-                    this.scoreText.setText(`Score: ${this.score}`);
-                }
-                pipeSprite.setData('scored', true);
-                // To prevent scoring again on the top pipe
-                const pair = pipeSprite.getData('pair');
-                if (pair) {
-                  pair.setData('scored', true);
-                }
-            }
-
             if (pipeSprite.x < -50) {
                 pipe.destroy();
             }
@@ -126,11 +106,6 @@ export default class SinglePlayerScene extends Phaser.Scene {
         
         const bottomPipe = this.pipes.create(this.cameras.main.width, gapBottom, 'pipe').setOrigin(0.5, 0) as Phaser.Physics.Arcade.Sprite;
         (bottomPipe.body as Phaser.Physics.Arcade.Body).allowGravity = false;
-
-        // Mark for scoring
-        bottomPipe.setData('isBottomPipe', true);
-        topPipe.setData('pair', bottomPipe);
-        bottomPipe.setData('pair', topPipe);
     }
 
     endGame() {
