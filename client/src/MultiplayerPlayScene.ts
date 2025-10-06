@@ -166,7 +166,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 if (player.y > 600 || player.y < 0) player.alive = false;
 
                 for (const pipe of pipes) {
-                    const birdHalfWidth = 16; const birdHalfHeight = 5; const pipeHalfWidth = 26;
+                    const birdHalfWidth = 16; const birdHalfHeight = 12; const pipeHalfWidth = 26;
                     if (player.x + birdHalfWidth > pipe.x - pipeHalfWidth && player.x - birdHalfWidth < pipe.x + pipeHalfWidth) {
                         if (player.y - birdHalfHeight < pipe.gapY - pipe.gapHeight / 2 || player.y + birdHalfHeight > pipe.gapY + pipe.gapHeight / 2) {
                             player.alive = false; break;
@@ -283,4 +283,4 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.playerLabels.clear();
     }
 }
-
+```eof

@@ -17,7 +17,6 @@ class LobbyScene extends Phaser.Scene {
     private myPlayerId: string = '';
     private players: Map<string, Player> = new Map();
     private roomListener: Unsubscribe | null = null;
-    // --- PERBAIKAN 1: Tambahkan properti untuk menyimpan referensi onDisconnect ---
     private onDisconnectRef: OnDisconnect | null = null;
 
     private generateShortId(length: number = 5): string {
@@ -121,7 +120,6 @@ class LobbyScene extends Phaser.Scene {
     private listenToRoomUpdates(roomId: string) {
         const roomRef = ref(database, `rooms/${roomId}`);
         
-        // --- PERBAIKAN 2: Simpan referensi onDisconnect untuk bisa dibatalkan nanti ---
         const playerRef = ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`);
         this.onDisconnectRef = onDisconnect(playerRef);
         this.onDisconnectRef.remove();
@@ -192,7 +190,6 @@ class LobbyScene extends Phaser.Scene {
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
         this.scale.off('resize', this.repositionInput, this);
 
-        // --- PERBAIKAN 3: Batalkan perintah onDisconnect sebelum berpindah halaman ---
         if (this.onDisconnectRef) {
             this.onDisconnectRef.cancel();
             this.onDisconnectRef = null;
@@ -204,4 +201,3 @@ class LobbyScene extends Phaser.Scene {
     }
 }
 export default LobbyScene;
-
