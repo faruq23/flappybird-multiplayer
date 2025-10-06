@@ -46,7 +46,14 @@ class LobbyScene extends Phaser.Scene {
         this.createRoomButton.on('pointerdown', () => {
             const newRoomId = this.generateShortId();
             const newRoomRef = ref(database, `rooms/${newRoomId}`);
-            const newPlayerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}`, playerNumber: 1 };
+            
+            // --- PERBAIKAN 1: Host selalu menjadi "Player 1" ---
+            const newPlayerLobbyData = { 
+                id: this.myPlayerId, 
+                name: `Player 1`, 
+                playerNumber: 1 
+            };
+            
             set(newRoomRef, {
                 roomId: newRoomId, hostId: this.myPlayerId, status: 'lobby',
                 lobbyPlayers: { [this.myPlayerId]: newPlayerLobbyData }
@@ -65,7 +72,15 @@ class LobbyScene extends Phaser.Scene {
             if (snapshot.exists()) {
                 const roomData = snapshot.val();
                 const numPlayers = Object.keys(roomData.lobbyPlayers || {}).length;
-                const playerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}`, playerNumber: numPlayers + 1 };
+                
+                // --- PERBAIKAN 2: Player yang join mendapat nomor urut berikutnya ---
+                const newPlayerNumber = numPlayers + 1;
+                const playerLobbyData = { 
+                    id: this.myPlayerId, 
+                    name: `Player ${newPlayerNumber}`, 
+                    playerNumber: newPlayerNumber 
+                };
+
                 await set(ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`), playerLobbyData);
                 this.currentRoomId = roomId; this.listenToRoomUpdates(roomId); this.showRoomUI(roomId, false);
             }
@@ -79,7 +94,6 @@ class LobbyScene extends Phaser.Scene {
         this.playerListText = this.add.text(this.cameras.main.width / 2, 300, '', { fontSize: '20px', color: '#fff', align: 'center' }).setOrigin(0.5);
         this.startButton = this.add.text(this.cameras.main.width / 2, 450, 'Start Game', { fontSize: '24px', color: '#fff', backgroundColor: '#28a745', padding: { x: 10, y: 5 } }).setOrigin(0.5).setInteractive().setVisible(false);
 
-        // Host membuat GameState awal yang lengkap saat menekan start
         this.startButton.on('pointerdown', () => {
             if (!this.currentRoomId) return;
             
@@ -94,7 +108,7 @@ class LobbyScene extends Phaser.Scene {
 
             const initialGameState = {
                 players: initialGamePlayers,
-                pipes: [{ x: 500, gapY: 300, gapHeight: 150 }]
+                pipes: [] // Mulai dengan pipa kosong agar lebih bersih
             };
 
             update(ref(database, `rooms/${this.currentRoomId}`), { 
@@ -119,10 +133,9 @@ class LobbyScene extends Phaser.Scene {
             
             const isHost = roomData.hostId === this.myPlayerId;
 
-            // Hanya pindah scene jika status 'playing' DAN gameState sudah ada
             if (roomData.status === 'playing' && roomData.gameState) {
                 this.cleanup(false);
-                window.location.href = `/multiplayer?roomId=${this.currentRoomId}&playerId=${this.myPlayerId}&isHost=${isHost}`;
+                window.location.href = `/game?roomId=${this.currentRoomId}&playerId=${this.myPlayerId}&isHost=${isHost}`;
             }
         });
     }
@@ -135,11 +148,21 @@ class LobbyScene extends Phaser.Scene {
 
         this.copyButton.setVisible(true);
         this.copyButton.on('pointerdown', () => {
-            navigator.clipboard.writeText(roomId).then(() => {
+            // Gunakan execCommand untuk kompatibilitas yang lebih luas
+            const textArea = document.createElement("textarea");
+            textArea.value = roomId;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
                 this.copyButton.setText('Copied!');
-                this.time.delayedCall(2000, () => {
-                    this.copyButton.setText('Copy');
-                });
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+            document.body.removeChild(textArea);
+
+            this.time.delayedCall(2000, () => {
+                this.copyButton.setText('Copy');
             });
         });
 
@@ -154,7 +177,11 @@ class LobbyScene extends Phaser.Scene {
     }
 
     updatePlayerListText() {
-        const playerNames = Array.from(this.players.values()).map(p => p.name || `Player ${p.id.substring(0,3)}`);
+        // --- PERBAIKAN 3: Urutkan daftar pemain berdasarkan nomornya ---
+        const playerNames = Array.from(this.players.values())
+            .sort((a, b) => (a.playerNumber || 0) - (b.playerNumber || 0))
+            .map(p => p.name || `Player ${p.id.substring(0,3)}`);
+            
         this.playerListText.setText('Players in room:\n' + playerNames.join('\n'));
     }
 
@@ -169,3 +196,4 @@ class LobbyScene extends Phaser.Scene {
     }
 }
 export default LobbyScene;
+
