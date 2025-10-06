@@ -20,12 +20,12 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     private backToMenuButton!: Phaser.GameObjects.Text;
     private gameOverText!: Phaser.GameObjects.Text;
     private restartButton!: Phaser.GameObjects.Text;
-
+    private background!: Phaser.GameObjects.TileSprite;
+    
     private gameState: GameState | null = null;
     private gameStarted: boolean = false;
     private gameStartTime: number = 0;
 
-    // --- Konstanta fisika disamakan untuk Host ---
     private readonly GRAVITY = 0.3;
     private readonly FLAP_VELOCITY = -7;
     private readonly PIPE_SPEED = 1.8;
@@ -43,6 +43,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
 
     preload() {
+        this.load.image("background", "Bg.png"); 
         this.load.spritesheet("bird","/Bird.png", { frameWidth: 32, frameHeight: 24 });
         this.load.spritesheet("bird2","/BirdB.png", { frameWidth: 32, frameHeight: 24 });
         this.load.image("pipeBottom", "/Pipe.png");
@@ -50,6 +51,10 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
 
     create() {
+        const { width, height } = this.scale;
+        this.background = this.add.tileSprite(0, 0, width, height, "background");
+        this.background.setOrigin(0, 0);
+
         if (!this.anims.exists('fly')) {
             this.anims.create({ key: "fly", frames: this.anims.generateFrameNumbers("bird", { start: 0, end: 2}), frameRate: 10, repeat: -1 });
         }
@@ -66,7 +71,6 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             }
         });
 
-        // Hanya Host yang perlu mendengarkan input
         if (this.isHost) {
             const inputsRef = ref(database, `rooms/${this.roomId}/inputs`);
             this.inputsListener = onValue(inputsRef, (snapshot) => {
@@ -110,13 +114,13 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     }
 
     handleInput() {
-        // Semua pemain hanya mengirimkan input, tanpa prediksi
         const inputRef = ref(database, `rooms/${this.roomId}/inputs/${this.meId}`);
         set(inputRef, { flap: true });
     }
     
     update(time: number, delta: number) {
-        // HANYA HOST yang menjalankan simulasi game
+        this.background.tilePositionX += 0.5;
+
         if (!this.isHost || !this.gameState) return;
 
         const gameStateRef = ref(database, `rooms/${this.roomId}/gameState`);
@@ -125,11 +129,9 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         const pipes = gameState.pipes || [];
         const deltaFactor = delta / 16.66;
 
-        // Selalu gerakkan pipa
         for (const pipe of pipes) { pipe.x -= this.PIPE_SPEED * deltaFactor; }
         gameState.pipes = pipes.filter((p: any) => p.x > -50);
 
-        // Spawn pipa baru setelah 4 detik
         if (this.time.now > this.gameStartTime + 4000) {
             let lastPipe = gameState.pipes[gameState.pipes.length - 1];
             if (!lastPipe || lastPipe.x < 600) {
@@ -143,9 +145,11 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         const allPlayers = Object.values(players);
         const allPlayersDead = allPlayers.length > 0 && allPlayers.every((p: any) => !p.alive);
 
-        if (allPlayersDead) return; // Hentikan simulasi jika semua mati
+        if (allPlayersDead) {
+            set(gameStateRef, gameState);
+            return;
+        }
 
-        // Hanya jalankan fisika burung jika game sudah dimulai
         if (this.gameStarted) {
             for (const playerId in players) {
                 const player = players[playerId];
@@ -171,12 +175,10 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
                 }
             }
         }
-
         set(gameStateRef, gameState);
     }
 
     syncFromServer(serverState: GameState) {
-        // Fungsi ini sekarang hanya untuk menggambar apa kata server
         const incomingPipeIds = new Set((serverState.pipes || []).map(p => p.id));
         this.pipeSprites.forEach((pipePair, pipeId) => {
             if (!incomingPipeIds.has(pipeId)) {
