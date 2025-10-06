@@ -20,6 +20,10 @@ export default class SinglePlayerScene extends Phaser.Scene {
     private readonly PIPE_SPEED = 120; // pixels per second
     private readonly PIPE_GAP_HEIGHT = 150;
     private readonly PIPE_SPAWN_INTERVAL = 2000; // ms
+    private readonly BIRD_HITBOX_W = 32;
+    private readonly BIRD_HITBOX_H = 10;
+    private readonly BIRD_HITBOX_OFFSET_Y = 7; // (24 - 10) / 2 = 7
+
 
     private pipeSpawnTimer!: Phaser.Time.TimerEvent;
 
