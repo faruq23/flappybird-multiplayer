@@ -47,6 +47,8 @@ export default class SinglePlayerScene extends Phaser.Scene {
 
         // Create Bird
         this.bird = this.physics.add.sprite(150, 300, 'bird').setOrigin(0.5);
+        (this.bird.body as Phaser.Physics.Arcade.Body).setSize(this.BIRD_HITBOX_W, this.BIRD_HITBOX_H);
+        (this.bird.body as Phaser.Physics.Arcade.Body).setOffset(0, this.BIRD_HITBOX_OFFSET_Y);
         this.bird.setGravityY(this.GRAVITY);
         this.anims.create({ key: 'fly', frames: this.anims.generateFrameNumbers('bird', { start: 0, end: 2 }), frameRate: 10, repeat: -1 });
         this.bird.anims.play('fly');
