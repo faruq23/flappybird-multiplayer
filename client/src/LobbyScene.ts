@@ -2,7 +2,7 @@
 
 import Phaser from 'phaser';
 import { database } from './firebase';
-import { ref, set, onValue, get, update, Unsubscribe, onDisconnect, OnDisconnect } from "firebase/database";
+import { ref, set, onValue, get, update, Unsubscribe, onDisconnect } from "firebase/database";
 import { Player } from '@shared/types';
 
 class LobbyScene extends Phaser.Scene {
@@ -17,8 +17,6 @@ class LobbyScene extends Phaser.Scene {
     private myPlayerId: string = '';
     private players: Map<string, Player> = new Map();
     private roomListener: Unsubscribe | null = null;
-    private onDisconnectRef: OnDisconnect | null = null;
-    private isNavigating: boolean = false; // Flag untuk mencegah eksekusi ganda
 
     private generateShortId(length: number = 5): string {
         return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
@@ -120,15 +118,9 @@ class LobbyScene extends Phaser.Scene {
 
     private listenToRoomUpdates(roomId: string) {
         const roomRef = ref(database, `rooms/${roomId}`);
-        
-        const playerRef = ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`);
-        this.onDisconnectRef = onDisconnect(playerRef);
-        this.onDisconnectRef.remove();
+        onDisconnect(ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`)).remove();
         
         this.roomListener = onValue(roomRef, (snapshot) => {
-            // Jika kita sudah dalam proses navigasi, abaikan update terakhir
-            if (this.isNavigating) return;
-
             if (!snapshot.exists()) { this.cleanup(true); window.location.href = '/'; return; }
             
             const roomData = snapshot.val();
@@ -139,20 +131,9 @@ class LobbyScene extends Phaser.Scene {
             
             const isHost = roomData.hostId === this.myPlayerId;
 
-            // =====================================================================
-            // PERBAIKAN KUNCI: Batalkan onDisconnect, beri jeda, baru navigasi
-            // =====================================================================
             if (roomData.status === 'playing' && roomData.gameState) {
-                // Set flag agar listener tidak terpicu lagi saat transisi
-                this.isNavigating = true;
-                
-                // Matikan semua listener & batalkan onDisconnect
                 this.cleanup(false);
-                
-                // Beri jeda 100ms sebelum navigasi untuk memberi waktu Firebase memproses `cancel()`
-                setTimeout(() => {
-                    window.location.href = `/game?roomId=${this.currentRoomId}&playerId=${this.myPlayerId}&isHost=${isHost}`;
-                }, 100);
+                window.location.href = `/game?roomId=${this.currentRoomId}&playerId=${this.myPlayerId}&isHost=${isHost}`;
             }
         });
     }
@@ -204,11 +185,6 @@ class LobbyScene extends Phaser.Scene {
         if (this.roomInput?.parentNode) { this.roomInput.parentNode.removeChild(this.roomInput); }
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
         this.scale.off('resize', this.repositionInput, this);
-
-        if (this.onDisconnectRef) {
-            this.onDisconnectRef.cancel();
-            this.onDisconnectRef = null;
-        }
         
         if (deletePlayerData && this.currentRoomId && this.myPlayerId) {
              set(ref(database, `rooms/${this.currentRoomId}/lobbyPlayers/${this.myPlayerId}`), null);
