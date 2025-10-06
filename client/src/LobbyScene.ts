@@ -1,4 +1,4 @@
-// src/LobbyScene.ts
+// src/LobbyScene.ts2
 
 import Phaser from 'phaser';
 import { database } from './firebase';
