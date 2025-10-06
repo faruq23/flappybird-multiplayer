@@ -283,4 +283,3 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
         this.playerLabels.clear();
     }
 }
-```eof
