@@ -2,7 +2,7 @@
 
 import Phaser from 'phaser';
 import { database } from './firebase';
-import { ref, set, onValue, get, update, Unsubscribe, onDisconnect } from "firebase/database";
+import { ref, set, onValue, get, update, Unsubscribe, onDisconnect, OnDisconnect } from "firebase/database";
 import { Player } from '@shared/types';
 
 class LobbyScene extends Phaser.Scene {
@@ -17,6 +17,8 @@ class LobbyScene extends Phaser.Scene {
     private myPlayerId: string = '';
     private players: Map<string, Player> = new Map();
     private roomListener: Unsubscribe | null = null;
+    // --- PERBAIKAN 1: Tambahkan properti untuk menyimpan referensi onDisconnect ---
+    private onDisconnectRef: OnDisconnect | null = null;
 
     private generateShortId(length: number = 5): string {
         return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
@@ -47,7 +49,6 @@ class LobbyScene extends Phaser.Scene {
             const newRoomId = this.generateShortId();
             const newRoomRef = ref(database, `rooms/${newRoomId}`);
             
-            // --- PERBAIKAN 1: Host selalu menjadi "Player 1" ---
             const newPlayerLobbyData = { 
                 id: this.myPlayerId, 
                 name: `Player 1`, 
@@ -73,7 +74,6 @@ class LobbyScene extends Phaser.Scene {
                 const roomData = snapshot.val();
                 const numPlayers = Object.keys(roomData.lobbyPlayers || {}).length;
                 
-                // --- PERBAIKAN 2: Player yang join mendapat nomor urut berikutnya ---
                 const newPlayerNumber = numPlayers + 1;
                 const playerLobbyData = { 
                     id: this.myPlayerId, 
@@ -108,7 +108,7 @@ class LobbyScene extends Phaser.Scene {
 
             const initialGameState = {
                 players: initialGamePlayers,
-                pipes: [] // Mulai dengan pipa kosong agar lebih bersih
+                pipes: []
             };
 
             update(ref(database, `rooms/${this.currentRoomId}`), { 
@@ -120,7 +120,11 @@ class LobbyScene extends Phaser.Scene {
 
     private listenToRoomUpdates(roomId: string) {
         const roomRef = ref(database, `rooms/${roomId}`);
-        onDisconnect(ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`)).remove();
+        
+        // --- PERBAIKAN 2: Simpan referensi onDisconnect untuk bisa dibatalkan nanti ---
+        const playerRef = ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`);
+        this.onDisconnectRef = onDisconnect(playerRef);
+        this.onDisconnectRef.remove();
         
         this.roomListener = onValue(roomRef, (snapshot) => {
             if (!snapshot.exists()) { this.cleanup(true); window.location.href = '/'; return; }
@@ -148,7 +152,6 @@ class LobbyScene extends Phaser.Scene {
 
         this.copyButton.setVisible(true);
         this.copyButton.on('pointerdown', () => {
-            // Gunakan execCommand untuk kompatibilitas yang lebih luas
             const textArea = document.createElement("textarea");
             textArea.value = roomId;
             document.body.appendChild(textArea);
@@ -177,7 +180,6 @@ class LobbyScene extends Phaser.Scene {
     }
 
     updatePlayerListText() {
-        // --- PERBAIKAN 3: Urutkan daftar pemain berdasarkan nomornya ---
         const playerNames = Array.from(this.players.values())
             .sort((a, b) => (a.playerNumber || 0) - (b.playerNumber || 0))
             .map(p => p.name || `Player ${p.id.substring(0,3)}`);
@@ -189,6 +191,12 @@ class LobbyScene extends Phaser.Scene {
         if (this.roomInput?.parentNode) { this.roomInput.parentNode.removeChild(this.roomInput); }
         if (this.roomListener) { this.roomListener(); this.roomListener = null; }
         this.scale.off('resize', this.repositionInput, this);
+
+        // --- PERBAIKAN 3: Batalkan perintah onDisconnect sebelum berpindah halaman ---
+        if (this.onDisconnectRef) {
+            this.onDisconnectRef.cancel();
+            this.onDisconnectRef = null;
+        }
         
         if (deletePlayerData && this.currentRoomId && this.myPlayerId) {
              set(ref(database, `rooms/${this.currentRoomId}/lobbyPlayers/${this.myPlayerId}`), null);
