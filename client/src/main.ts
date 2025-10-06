@@ -8,7 +8,7 @@ import SinglePlayerScene from "./SinglePlayerScene";
 const routes: Record<string, typeof Phaser.Scene> = {
     '/': MainMenuScene,
     '/lobby': LobbyScene,
-    '/multiplayer': MultiplayerPlayScene,
+    '/game': MultiplayerPlayScene,
     '/singleplayer': SinglePlayerScene,
 };
 
