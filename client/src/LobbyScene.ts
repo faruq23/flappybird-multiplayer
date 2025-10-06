@@ -17,7 +17,6 @@ class LobbyScene extends Phaser.Scene {
     private myPlayerId: string = '';
     private players: Map<string, Player> = new Map();
     private roomListener: Unsubscribe | null = null;
-    private playerColors = [0xff0000, 0x0000ff, 0x00ff00, 0xffff00];
 
     private generateShortId(length: number = 5): string {
         return Math.random().toString(36).substring(2, 2 + length).toUpperCase();
@@ -47,7 +46,7 @@ class LobbyScene extends Phaser.Scene {
         this.createRoomButton.on('pointerdown', () => {
             const newRoomId = this.generateShortId();
             const newRoomRef = ref(database, `rooms/${newRoomId}`);
-            const newPlayerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}`, color: this.playerColors[0], playerNumber: 1 };
+            const newPlayerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}`, playerNumber: 1 };
             set(newRoomRef, {
                 roomId: newRoomId, hostId: this.myPlayerId, status: 'lobby',
                 lobbyPlayers: { [this.myPlayerId]: newPlayerLobbyData }
@@ -66,8 +65,7 @@ class LobbyScene extends Phaser.Scene {
             if (snapshot.exists()) {
                 const roomData = snapshot.val();
                 const numPlayers = Object.keys(roomData.lobbyPlayers || {}).length;
-                const playerColor = this.playerColors[numPlayers % this.playerColors.length];
-                const playerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}`, color: playerColor, playerNumber: numPlayers + 1 };
+                const playerLobbyData = { id: this.myPlayerId, name: `Player ${Math.floor(Math.random() * 100)}`, playerNumber: numPlayers + 1 };
                 await set(ref(database, `rooms/${roomId}/lobbyPlayers/${this.myPlayerId}`), playerLobbyData);
                 this.currentRoomId = roomId; this.listenToRoomUpdates(roomId); this.showRoomUI(roomId, false);
             }

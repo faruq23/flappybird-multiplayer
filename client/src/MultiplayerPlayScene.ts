@@ -44,6 +44,7 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
 
     preload() {
         this.load.spritesheet("bird","/Bird.png", { frameWidth: 32, frameHeight: 24 });
+        this.load.spritesheet("bird2","/BirdB.png", { frameWidth: 32, frameHeight: 24 });
         this.load.image("pipeBottom", "/Pipe.png");
         this.load.image("pipeTop", "/InvertPipe.png");
     }
@@ -51,6 +52,9 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
     create() {
         if (!this.anims.exists('fly')) {
             this.anims.create({ key: "fly", frames: this.anims.generateFrameNumbers("bird", { start: 0, end: 2}), frameRate: 10, repeat: -1 });
+        }
+        if (!this.anims.exists('fly2')) {
+            this.anims.create({ key: "fly2", frames: this.anims.generateFrameNumbers("bird2", { start: 0, end: 2}), frameRate: 10, repeat: -1 });
         }
         
         const gameStateRef = ref(database, `rooms/${this.roomId}/gameState`);
@@ -213,10 +217,8 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             let label = this.playerLabels.get(serverPlayer.id);
 
             if (!bird) {
-                bird = this.add.sprite(serverPlayer.x, serverPlayer.y, "bird").setOrigin(0.5);
-                if (serverPlayer.color) {
-                    bird.setTint(serverPlayer.color);
-                }
+                const birdSprite = serverPlayer.playerNumber === 2 ? 'bird2' : 'bird';
+                bird = this.add.sprite(serverPlayer.x, serverPlayer.y, birdSprite).setOrigin(0.5);
                 this.birds.set(serverPlayer.id, bird);
 
                 label = this.add.text(serverPlayer.x, serverPlayer.y - 20, `P${serverPlayer.playerNumber}`, { fontSize: '16px', color: '#ffffff' }).setOrigin(0.5);
@@ -231,7 +233,10 @@ export default class MultiplayerPlayScene extends Phaser.Scene {
             if (serverPlayer.alive) {
                 bird.alpha = 1;
                 if (label) label.alpha = 1;
-                if (!bird.anims.isPlaying) bird.anims.play("fly", true);
+                const animToPlay = serverPlayer.playerNumber === 2 ? 'fly2' : 'fly';
+                if (!bird.anims.isPlaying || bird.anims.currentAnim?.key !== animToPlay) {
+                    bird.anims.play(animToPlay, true);
+                }
             } else {
                 bird.alpha = 0.5;
                 if (label) label.alpha = 0.5;
